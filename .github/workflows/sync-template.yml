@@ -1,0 +1,22 @@
+name: Sync from Template Repository
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs every day at midnight UTC
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+      - name: Add Upstream
+        run: |
+          git remote add upstream https://github.com/Phenixis/boilerplate.md.git
+          git fetch upstream
+          git merge upstream/main --allow-unrelated-histories || true
+          git push origin main
