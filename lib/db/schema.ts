@@ -178,6 +178,112 @@ export const ticketComment = pgTable('ticket_comment', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+/* SPECIFIC TABLES */
+export const university = pgTable('university', {
+  id: serial('id').primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+export const researcher = pgTable('researcher', {
+  pid: varchar('pid', { length: 255 }).primaryKey(),
+  last_name: varchar('last_name', { length: 255 }).notNull(),
+  first_name: varchar('first_name', { length: 255 }).notNull(),
+  ORCID: varchar('ORCID', { length: 255 }).notNull(),
+  scraped: integer('scraped').notNull().default(-2),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+export const affiliation = pgTable(
+  'affiliation',
+  {
+    researcherPid: varchar('researcher_id', { length: 255 })
+      .notNull()
+      .references(() => researcher.pid, { onDelete: "cascade" }),
+    universityId: integer('university_id')
+      .notNull()
+      .references(() => university.id, { onDelete: "cascade" }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at'),
+  },
+  (affiliation) => [
+    {
+      compositePK: primaryKey({
+        columns: [affiliation.researcherPid, affiliation.universityId],
+      }),
+    },
+  ]
+);
+
+export const typePublication = pgTable('type_publication', {
+  id: serial('id').primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  abbreviation: varchar('abbreviation', { length: 255 }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+export const paper = pgTable('paper', {
+  id: serial('id').primaryKey(),
+  doi: varchar('doi', { length: 255 }),
+  titre: varchar('titre', { length: 255 }).notNull(),
+  venue: varchar('venue', { length: 255 }),
+  typePublicationId: integer('type_publication_id')
+    .notNull()
+    .references(() => typePublication.id, { onDelete: "cascade" }),
+  year: integer('year').notNull(),
+  page_start: integer('page_start'),
+  page_end: integer('page_end'),
+  ee: varchar('ee', { length: 255 }),
+  dblp_id: varchar('dblp_id', { length: 255 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+export const article = pgTable('article', {
+  id: serial('id').primaryKey(),
+  paperId: integer('paper_id')
+    .notNull()
+    .references(() => paper.id, { onDelete: "cascade" }),
+  volume: integer('volume').notNull(),
+  number: integer('number').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+export const contribution = pgTable(
+  'contribution',
+  {
+    researcherPid: varchar('researcher_id', { length: 255 })
+      .notNull()
+      .references(() => researcher.pid, { onDelete: "cascade" }),
+    paperId: integer('paper_id')
+      .notNull()
+      .references(() => paper.id, { onDelete: "cascade" }),
+    position: integer('position').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at'),
+  },
+  (contribution) => [
+    {
+      compositePK: primaryKey({
+        columns: [contribution.researcherPid, contribution.paperId],
+      }),
+    },
+  ]
+);
+
+/* RELATIONS */
+
 export const teamsRelations = relations(teams, ({ many }) => ({
   teamMembers: many(teamMembers),
   activityLogs: many(activityLogs),
@@ -274,6 +380,57 @@ export const TicketCommentRelations = relations(ticketComment, ({ one }) => ({
   }),
 }));
 
+export const UniversityRelations = relations(university, ({ many }) => ({
+  affiliations: many(affiliation),
+}));
+
+export const ResearcherRelations = relations(researcher, ({ many }) => ({
+  affiliations: many(affiliation),
+  contributions: many(contribution),
+}));
+
+export const AffiliationRelations = relations(affiliation, ({ one }) => ({
+  university: one(university, {
+    fields: [affiliation.universityId],
+    references: [university.id],
+  }),
+  researcher: one(researcher, {
+    fields: [affiliation.researcherPid],
+    references: [researcher.pid],
+  }),
+}));
+
+export const TypePublicationRelations = relations(typePublication, ({ many }) => ({
+  papers: many(paper),
+}));
+
+export const PaperRelations = relations(paper, ({ one, many }) => ({
+  typePublication: one(typePublication, {
+    fields: [paper.typePublicationId],
+    references: [typePublication.id],
+  }),
+  articles: many(article),
+  contributions: many(contribution),
+}));
+
+export const ArticleRelations = relations(article, ({ one }) => ({
+  paper: one(paper, {
+    fields: [article.paperId],
+    references: [paper.id],
+  }),
+}));
+
+export const ContributionRelations = relations(contribution, ({ one }) => ({
+  researcher: one(researcher, {
+    fields: [contribution.researcherPid],
+    references: [researcher.pid],
+  }),
+  paper: one(paper, {
+    fields: [contribution.paperId],
+    references: [paper.id],
+  }),
+}));
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Team = typeof teams.$inferSelect;
@@ -297,6 +454,21 @@ export type Ticket = typeof ticket.$inferSelect;
 export type NewTicket = typeof ticket.$inferInsert;
 export type TicketComment = typeof ticketComment.$inferSelect;
 export type NewTicketComment = typeof ticketComment.$inferInsert;
+
+export type University = typeof university.$inferSelect;
+export type NewUniversity = typeof university.$inferInsert;
+export type Researcher = typeof researcher.$inferSelect;
+export type NewResearcher = typeof researcher.$inferInsert;
+export type Affiliation = typeof affiliation.$inferSelect;
+export type NewAffiliation = typeof affiliation.$inferInsert;
+export type TypePublication = typeof typePublication.$inferSelect;
+export type NewTypePublication = typeof typePublication.$inferInsert;
+export type Paper = typeof paper.$inferSelect;
+export type NewPaper = typeof paper.$inferInsert;
+export type Article = typeof article.$inferSelect;
+export type NewArticle = typeof article.$inferInsert;
+export type Contribution = typeof contribution.$inferSelect;
+export type NewContribution = typeof contribution.$inferInsert;
 
 export enum ActivityType {
   SIGN_UP = 'SIGN_UP',
