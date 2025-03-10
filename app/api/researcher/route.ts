@@ -14,7 +14,9 @@ export async function GET(req: NextRequest) {
     if (dbresult.length !== 0) {
         return NextResponse.json(dbresult[0]);
     }
-
+    
+    console.log("No researcher found in database, scraping...");
+    
     const scrape_result = await scrapeResearcher(pid);
 
     if (scrape_result) {
