@@ -8,10 +8,9 @@ import {
 } from "@/components/ui/accordion";
 import Publication from "./publication";
 import { Badge } from "@/components/ui/badge";
-import {useState, useEffect, useRef} from "react";
+import { useState, useEffect, useRef } from "react";
 import GlobeComponent from "@/components/big/globe";
 export default function Page() {
-
   return (
     <main className="flex flex-col min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-4xl space-y-4">
@@ -39,7 +38,7 @@ export default function Page() {
           year={2021}
           dblp="https://dblp.org/rec/conf/mm/KhanDHBLVOJOT21"
         />
-        <GlobeComponent className="max-h-96 max-w-96"/>
+        <GlobeComponent className="max-h-96 max-w-96" />
       </div>
     </main>
   );
