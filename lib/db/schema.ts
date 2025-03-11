@@ -252,8 +252,8 @@ export const article = pgTable('article', {
   paperId: integer('paper_id')
     .notNull()
     .references(() => paper.id, { onDelete: "cascade" }),
-  volume: integer('volume').notNull(),
-  number: integer('number').notNull(),
+  volume: varchar('volume', { length: 100 }).notNull(),
+  number: varchar('number', { length: 100 }).notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   deletedAt: timestamp('deleted_at'),

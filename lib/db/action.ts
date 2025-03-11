@@ -95,6 +95,15 @@ export async function scrapeResearcher(pid: string) {
         const urls: string[] = person.url?.map((u: any) => u._) ?? [];
 
         // Prepare to gather papers, articles, contributions
+        const researchers: Array<{ PID: string; NOM: string; PRENOM: string; ORCID: string; SCRAPED: number }> = [
+            {
+                PID: pid,
+                NOM: authorName.split(' ')[1],
+                PRENOM: authorName.split(' ')[0],
+                ORCID: '',
+                SCRAPED: 1
+            }
+        ];
         const papers: any[] = [];
         const articles: any[] = [];
         const contributions: any[] = [];
@@ -130,11 +139,23 @@ export async function scrapeResearcher(pid: string) {
                 const authorElems = inproc.author || [];
                 authorElems.forEach((auth: any, idx: number) => {
                     const pidAttr = auth.$?.pid ?? "";
+                    const authorName = auth._ ?? "";
+                    const [firstName, lastName] = authorName.split(' ');
                     contributions.push({
                         "RESEARCHER.PID": pidAttr,
                         "ARTICLE.doi": doi,
                         position: idx + 1
                     });
+                    // Save authors in the researchers array
+                    if (!researchers.some(researcher => researcher.PID === pidAttr)) {
+                        researchers.push({
+                            PID: pidAttr,
+                            NOM: lastName,
+                            PRENOM: firstName,
+                            ORCID: '',
+                            SCRAPED: -2
+                        });
+                    }
                 });
             }
 
@@ -173,63 +194,88 @@ export async function scrapeResearcher(pid: string) {
                 const authorElems = art.author || [];
                 authorElems.forEach((auth: any, idx: number) => {
                     const pidAttr = auth.$?.pid ?? "";
+                    const authorName = auth._ ?? "";
+                    const [firstName, lastName] = authorName.split(' ');
                     contributions.push({
                         "RESEARCHER.PID": pidAttr,
                         "ARTICLE.doi": doi,
                         position: idx + 1
                     });
+                    // Save authors in the researchers array
+                    if (!researchers.some(researcher => researcher.PID === pidAttr)) {
+                        researchers.push({
+                            PID: pidAttr,
+                            NOM: lastName,
+                            PRENOM: firstName,
+                            ORCID: '',
+                            SCRAPED: -2
+                        });
+                    }
                 });
                 articleIdCounter += 1;
             }
         }
 
+        // Prepare the author data to return
+        const [firstName, lastName] = authorName.split(' ');
+
         const author_data = {
             pid,
-            authorName,
-            affiliations: uniqueAffiliations,
-            universities,
-            univMap,
-            urls,
+            lastName,
+            firstName,
+            ORCID: "",
+            scraped: 1
         };
 
-        db.transaction(async (tx) => {
+    db.transaction(async (tx) => {
 
-            // Save researcher data
-            await createResearcher(pid, authorName.split(' ')[1], authorName.split(' ')[0], '', 1, tx);
+        // Save researcher data
+        console.log("Saving researcher data...");
+        for (const researcher of researchers) {
+            await createResearcher(researcher.PID, researcher.NOM, researcher.PRENOM, researcher.ORCID, researcher.SCRAPED, tx);
+        }
 
-            // Save universities
-            const universityIds: Record<string, number> = {};
-            for (const university of universities) {
-                universityIds[university.NOM] = (await createUniversity(university.NOM, tx))[0].id;
-            }
+        // Save universities
+        console.log("Saving universities...");
+        const universityIds: Record<string, number> = {};
+        for (const university of universities) {
+            universityIds[university.NOM] = (await createUniversity(university.NOM, tx))[0].id;
+        }
 
-            // Save affiliations
-            for (const affiliation of uniqueAffiliations) {
-                const universityId = universityIds[affiliation as string];
-                await createAffiliation(pid, universityId, tx);
-            }
+        // Save affiliations
+        console.log("Saving affiliations...");
+        for (const affiliation of uniqueAffiliations) {
+            const universityId = universityIds[affiliation as string];
+            await createAffiliation(pid, universityId, tx);
+        }
 
-            // Save papers
-            for (const paper of papers) {
-                await createPaper(paper.doi, paper.titre, paper.venue, paper["TYPE_PUBLICATION.id"], parseInt(paper.year), parseInt(paper.pages.split('-')[0]), parseInt(paper.pages.split('-')[1]), paper.ee, tx);
-            }
+        // Save papers
+        console.log("Saving papers...");
+        const paperIds: Record<string, number> = {};
+        for (const paper of papers) {
+            paperIds[paper.doi] = (await createPaper(paper.doi, paper.titre, paper.venue, paper["TYPE_PUBLICATION.id"], parseInt(paper.year), paper.pages.includes("-") ? parseInt(paper.pages.split('-')[0]) : undefined, paper.pages.includes("-") ? parseInt(paper.pages.split('-')[1]) : undefined, paper.ee, tx))[0].id;
+        }
 
-            // Save articles
-            for (const article of articles) {
-                await createArticle(article["PAPER.id"], parseInt(article.number), parseInt(article.volume), tx);
-            }
+        // Save articles
+        console.log("Saving articles...");
+        for (const article of articles) {
+            await createArticle(paperIds[article["PAPER.id"]], article.number || "", article.volume || "", tx);
+        }
 
-            // Save contributions
-            for (const contribution of contributions) {
-                await createContributions(contribution["RESEARCHER.PID"], contribution.position, contribution["ARTICLE.doi"], tx);
-            }
-        });
+        // Save contributions
+        console.log("Saving contributions...");
+        for (const contribution of contributions) {
+            await createContributions(contribution["RESEARCHER.PID"], contribution.position, paperIds[contribution["ARTICLE.doi"]], tx);
+        }
 
-        return author_data;
-    } catch (error) {
-        // Handle errors gracefully
-        throw new Error(`Failed to scrape researcher data: ${error}`);
-    }
+        console.log("Data saved successfully!");
+    });
+
+    return author_data;
+} catch (error) {
+    // Handle errors gracefully
+    throw new Error(`Failed to scrape researcher data: ${error}`);
+}
 }
 
 export function getResearcher(pid: string, tx?: any) {
@@ -321,7 +367,7 @@ export function deleteTypePublication(id: number, tx?: any) {
 }
 
 export function createPaper(doi: string, titre: string, venue: string, typePublicationId: number, year: number, page_start?: number, page_end?: number, ee?: string, tx?: any) {
-    return (tx ? tx : db).insert(paper).values({ doi, titre, venue, typePublicationId, year, page_start, page_end, ee } as NewPaper);
+    return (tx ? tx : db).insert(paper).values({ doi, titre, venue, typePublicationId, year, page_start, page_end, ee } as NewPaper).returning({ id: paper.id });
 }
 
 export function updatePaper(id: number, doi?: string, titre?: string, venue?: string, typePublicationId?: number, year?: number, page_start?: number, page_end?: number, ee?: string, tx?: any) {
@@ -343,7 +389,7 @@ export function deletePaper(id: number, tx?: any) {
     }).where(eq(paper.id, id));
 }
 
-export function createArticle(paperId: number, number: number, volume: number, tx?: any) {
+export function createArticle(paperId: number, number: string, volume: string, tx?: any) {
     return (tx ? tx : db).insert(article).values({ paperId, number: number, volume: volume } as NewArticle);
 }
 
