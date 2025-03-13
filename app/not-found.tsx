@@ -1,10 +1,7 @@
 import Link from 'next/link';
 import Logo from '@/components/big/logo';
-import { getUser } from '@/lib/db/queries';
 
 export default async function NotFound() {
-  const user = await getUser();
-
   return (
     <div className="flex items-center justify-center h-screen">
       <div className="flex flex-col items-center justify-center max-w-md space-y-8 p-4 text-center">
@@ -25,39 +22,18 @@ export default async function NotFound() {
           >
             Home
           </Link>
-          {
-            user ? (
-              <>
-                <Link
-                  href="/dashboard"
-                  className="max-w-48 flex justify-center py-2 px-4 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/settings"
-                  className="max-w-48 flex justify-center py-2 px-4 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                >
-                  Settings
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/sign-in"
-                  className="max-w-48 flex justify-center py-2 px-4 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/sign-up"
-                  className="max-w-48 flex justify-center py-2 px-4 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                >
-                  Sign Up
-                </Link>
-              </>
-            )
-          }
+          <Link
+            href="/sign-in"
+            className="max-w-48 flex justify-center py-2 px-4 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+          >
+            Sign In
+          </Link>
+          <Link
+            href="/sign-up"
+            className="max-w-48 flex justify-center py-2 px-4 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+          >
+            Sign Up
+          </Link>
         </div>
       </div>
     </div>

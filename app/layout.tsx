@@ -2,7 +2,6 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Manrope } from "next/font/google";
 import { ValuesProvider } from "@/lib/auth";
-import { getUser } from "@/lib/db/queries";
 import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
@@ -25,7 +24,6 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  let userPromise = getUser();
   let appName = process.env.APP_NAME || "[App]";
   let companyName = process.env.COMPANY_NAME || "Company";
 
@@ -44,7 +42,6 @@ export default function RootLayout({
           .pointsData(myData);
         </script>
         <ValuesProvider
-          userPromise={userPromise}
           appName={appName}
           companyName={companyName}
         >
