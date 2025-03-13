@@ -285,6 +285,10 @@ export function getResearcher(pid: string, tx?: any) {
     ));
 }
 
+export function getAllResearchers(tx?: any) {
+    return (tx ? tx : db).select().from(researcher);
+}
+
 export function updateResearcher(pid: string, last_name?: string, first_name?: string, ORCID?: string, scraped?: number, tx?: any) {
     return (tx ? tx : db).update(researcher).set({
         last_name,
@@ -368,6 +372,10 @@ export function deleteTypePublication(id: number, tx?: any) {
 
 export function createPaper(doi: string, titre: string, venue: string, typePublicationId: number, year: number, page_start?: number, page_end?: number, ee?: string, tx?: any) {
     return (tx ? tx : db).insert(paper).values({ doi, titre, venue, typePublicationId, year, page_start, page_end, ee } as NewPaper).returning({ id: paper.id });
+}
+
+export function getPaperFromResearcherPid(researcherPid: string, tx?: any) {
+    return (tx ? tx : db).select().from(paper).join(contribution, eq(paper.id, contribution.paperId)).where(eq(contribution.researcherPid, researcherPid));
 }
 
 export function updatePaper(id: number, doi?: string, titre?: string, venue?: string, typePublicationId?: number, year?: number, page_start?: number, page_end?: number, ee?: string, tx?: any) {
