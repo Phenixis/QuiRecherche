@@ -52,7 +52,9 @@ export default function Publication({
               </Badge>
               <span className="">{year}</span>
               {/* <span className="fi fi-jp rounded-[1px] border border-gray-100"></span> */}
-              <span className="font-black group-hover:underline">{title}</span>
+              <span className="font-black group-hover:underline">
+                {title.length < 100 ? title : title.substring(0, 100) + "..."}
+              </span>
             </div>
           </AccordionTrigger>
           <AccordionContent className="flex space-x-2">
