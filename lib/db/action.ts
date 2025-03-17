@@ -40,8 +40,8 @@ import { parseStringPromise } from 'xml2js';
 
 type Transaction = PgTransaction<PostgresJsQueryResultHKT, typeof import("@/lib/db/schema"), ExtractTablesWithRelations<typeof import("@/lib/db/schema")>>;
 
-export function createResearcher(pid: string, last_name: string, first_name: string, ORCID: string, scraped: number, tx?: Transaction) {
-    return (tx ? tx : db).insert(researcherTable).values({ pid, last_name, first_name, ORCID, scraped } as NewResearcher);
+export async function createResearcher(pid: string, last_name: string, first_name: string, ORCID: string, scraped: number, tx?: Transaction) {
+    return await (tx ? tx : db).insert(researcherTable).values({ pid, last_name, first_name, ORCID, scraped } as NewResearcher);
 }
 
 export async function scrapeResearcher(pid: string) {
@@ -252,7 +252,8 @@ export async function scrapeResearcher(pid: string) {
         }
 
         // Prepare the author data to return
-        const [firstName, lastName] = authorName.split(' ');
+        const firstName = authorName.split(' ')[0];
+        const lastName = authorName.split(' ').slice(1).join(' ');
 
         const author_data = {
             pid,
@@ -440,19 +441,19 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
 
 }
 
-export function getResearcher(pid: string, tx?: Transaction) {
-    return (tx ? tx : db).select().from(researcherTable).where(eq(
+export async function getResearcher(pid: string, tx?: Transaction) {
+    return await (tx ? tx : db).select().from(researcherTable).where(eq(
         researcherTable.pid,
         pid
     ));
 }
 
-export function getAllResearchers(tx?: Transaction) {
-    return (tx ? tx : db).select().from(researcherTable);
+export async function getAllResearchers(tx?: Transaction) {
+    return await (tx ? tx : db).select().from(researcherTable);
 }
 
-export function updateResearcher(pid: string, last_name?: string, first_name?: string, ORCID?: string, scraped?: number, tx?: Transaction) {
-    return (tx ? tx : db).update(researcherTable).set({
+export async function updateResearcher(pid: string, last_name?: string, first_name?: string, ORCID?: string, scraped?: number, tx?: Transaction) {
+    return await (tx ? tx : db).update(researcherTable).set({
         last_name,
         first_name,
         ORCID,
@@ -460,55 +461,55 @@ export function updateResearcher(pid: string, last_name?: string, first_name?: s
     }).where(eq(researcherTable.pid, pid));
 }
 
-export function deleteResearcher(pid: string, tx?: Transaction) {
-    return (tx ? tx : db).update(researcherTable).set({
+export async function deleteResearcher(pid: string, tx?: Transaction) {
+    return await (tx ? tx : db).update(researcherTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
     }).where(eq(researcherTable.pid, pid));
 }
 
-export function createUniversity(name: string, tx?: Transaction) {
-    return (tx ? tx : db).insert(universityTable).values({ name } as NewUniversity).returning({ id: universityTable.id });
+export async function createUniversity(name: string, tx?: Transaction) {
+    return await (tx ? tx : db).insert(universityTable).values({ name } as NewUniversity).returning({ id: universityTable.id });
 }
 
-export function getUniversity(id: number, tx?: Transaction) {
-    return (tx ? tx : db).select().from(universityTable).where(eq(
+export async function getUniversity(id: number, tx?: Transaction) {
+    return await (tx ? tx : db).select().from(universityTable).where(eq(
         universityTable.id,
         id
     ));
 }
 
-export function updateUniversity(id: number, name?: string, tx?: Transaction) {
-    return (tx ? tx : db).update(universityTable).set({
+export async function updateUniversity(id: number, name?: string, tx?: Transaction) {
+    return await (tx ? tx : db).update(universityTable).set({
         name
     }).where(eq(universityTable.id, id));
 }
 
-export function deleteUniversity(id: number, tx?: Transaction) {
-    return (tx ? tx : db).update(universityTable).set({
+export async function deleteUniversity(id: number, tx?: Transaction) {
+    return await (tx ? tx : db).update(universityTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
     }).where(eq(universityTable.id, id));
 }
 
-export function createAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
-    return (tx ? tx : db).insert(affiliationTable).values({ researcherPid, universityId } as NewAffiliation);
+export async function createAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db).insert(affiliationTable).values({ researcherPid, universityId } as NewAffiliation);
 }
 
-export function getAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
-    return (tx ? tx : db).select().from(affiliationTable).where(and(
+export async function getAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db).select().from(affiliationTable).where(and(
         eq(affiliationTable.researcherPid, researcherPid),
         eq(affiliationTable.universityId, universityId)
     ));
 };
 
-export function getAffiliationByUniversityId(universityId: number, tx?: any) {
-    return (tx ? tx : db).select().from(affiliationTable).where(eq(
+export async function getAffiliationByUniversityId(universityId: number, tx?: any) {
+    return await (tx ? tx : db).select().from(affiliationTable).where(eq(
         affiliationTable.universityId,
         universityId
     ));
 }
 
-export function deleteAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
-    return (tx ? tx : db).update(affiliationTable).set({
+export async function deleteAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db).update(affiliationTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
     }).where(and(
         eq(affiliationTable.researcherPid, researcherPid),
@@ -516,39 +517,39 @@ export function deleteAffiliation(researcherPid: string, universityId: number, t
     ));
 }
 
-export function createTypePublication(name: string, tx?: Transaction) {
-    return (tx ? tx : db).insert(typePublicationTable).values({ name } as NewTypePublication);
+export async function createTypePublication(name: string, tx?: Transaction) {
+    return await (tx ? tx : db).insert(typePublicationTable).values({ name } as NewTypePublication);
 }
 
-export function getTypePublication(id: number, tx?: Transaction) {
-    return (tx ? tx : db).select().from(typePublicationTable).where(eq(
+export async function getTypePublication(id: number, tx?: Transaction) {
+    return await (tx ? tx : db).select().from(typePublicationTable).where(eq(
         typePublicationTable.id,
         id
     ));
 }
 
-export function updateTypePublication(id: number, name?: string, tx?: Transaction) {
-    return (tx ? tx : db).update(typePublicationTable).set({
+export async function updateTypePublication(id: number, name?: string, tx?: Transaction) {
+    return await (tx ? tx : db).update(typePublicationTable).set({
         name
     }).where(eq(typePublicationTable.id, id));
 }
 
-export function deleteTypePublication(id: number, tx?: Transaction) {
-    return (tx ? tx : db).update(typePublicationTable).set({
+export async function deleteTypePublication(id: number, tx?: Transaction) {
+    return await (tx ? tx : db).update(typePublicationTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
     }).where(eq(typePublicationTable.id, id));
 }
 
-export function createPaper(doi: string, titre: string, venue: string, typePublicationId: number, year: number, page_start?: number, page_end?: number, ee?: string, tx?: Transaction) {
-    return (tx ? tx : db).insert(paperTable).values({ doi, titre, venue, typePublicationId, year, page_start, page_end, ee } as NewPaper).returning({ id: paperTable.id });
+export async function createPaper(doi: string, titre: string, venue: string, typePublicationId: number, year: number, page_start?: number, page_end?: number, ee?: string, tx?: Transaction) {
+    return await (tx ? tx : db).insert(paperTable).values({ doi, titre, venue, typePublicationId, year, page_start, page_end, ee } as NewPaper).returning({ id: paperTable.id });
 }
 
-export function getPaperFromResearcherPid(researcherPid: string, tx?: Transaction) {
-    return (tx ? tx : db).select().from(paperTable).innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId)).where(eq(contributionTable.researcherPid, researcherPid));
+export async function getPaperFromResearcherPid(researcherPid: string, tx?: Transaction) {
+    return await (tx ? tx : db).select().from(paperTable).innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId)).where(eq(contributionTable.researcherPid, researcherPid));
 }
 
-export function updatePaper(id: number, doi?: string, titre?: string, venue?: string, typePublicationId?: number, year?: number, page_start?: number, page_end?: number, ee?: string, tx?: Transaction) {
-    return (tx ? tx : db).update(paperTable).set({
+export async function updatePaper(id: number, doi?: string, titre?: string, venue?: string, typePublicationId?: number, year?: number, page_start?: number, page_end?: number, ee?: string, tx?: Transaction) {
+    return await (tx ? tx : db).update(paperTable).set({
         doi,
         titre,
         venue,
@@ -560,42 +561,48 @@ export function updatePaper(id: number, doi?: string, titre?: string, venue?: st
     }).where(eq(paperTable.id, id));
 }
 
-export function deletePaper(id: number, tx?: Transaction) {
-    return (tx ? tx : db).update(paperTable).set({
+export async function deletePaper(id: number, tx?: Transaction) {
+    return await (tx ? tx : db).update(paperTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
     }).where(eq(paperTable.id, id));
 }
 
-export function createArticle(paperId: number, number: string, volume: string, tx?: Transaction) {
-    return (tx ? tx : db).insert(articleTable).values({ paperId, number: number, volume: volume } as NewArticle);
+export async function createArticle(paperId: number, number: string, volume: string, tx?: Transaction) {
+    return await (tx ? tx : db).insert(articleTable).values({ paperId, number: number, volume: volume } as NewArticle);
 }
 
-export function getArticle(id: number, tx?: Transaction) {
-    return (tx ? tx : db).select().from(articleTable).where(eq(
+export async function getArticle(id: number, tx?: Transaction) {
+    return await (tx ? tx : db).select().from(articleTable).where(eq(
         articleTable.id,
         id
     ));
 }
 
-export function deleteArticle(id: number, tx?: Transaction) {
-    return (tx ? tx : db).update(articleTable).set({
+export async function deleteArticle(id: number, tx?: Transaction) {
+    return await (tx ? tx : db).update(articleTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
     }).where(eq(articleTable.id, id));
 }
 
-export function createContributions(researcherPid: string, position: number, paperId: number, tx?: Transaction) {
-    return (tx ? tx : db).insert(contributionTable).values({ researcherPid, position, paperId } as NewContribution);
+export async function createContributions(researcherPid: string, position: number, paperId: number, tx?: Transaction) {
+    const alreadyExists = await getContribution(researcherPid, position, tx);
+
+    if (alreadyExists.length > 0) {
+        return;
+    }
+
+    return await (tx ? tx : db).insert(contributionTable).values({ researcherPid, position, paperId } as NewContribution);
 }
 
-export function getContribution(researcherPid: string, position: number, tx?: Transaction) {
-    return (tx ? tx : db).select().from(contributionTable).where(and(
+export async function getContribution(researcherPid: string, position: number, tx?: Transaction) {
+    return await (tx ? tx : db).select().from(contributionTable).where(and(
         eq(contributionTable.researcherPid, researcherPid),
         eq(contributionTable.position, position)
     ));
 }
 
-export function deleteContribution(researcherPid: string, position: number, tx?: Transaction) {
-    return (tx ? tx : db).update(contributionTable).set({
+export async function deleteContribution(researcherPid: string, position: number, tx?: Transaction) {
+    return await (tx ? tx : db).update(contributionTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
     }).where(and(
         eq(contributionTable.researcherPid, researcherPid),
