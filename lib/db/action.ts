@@ -1,12 +1,45 @@
 import { db } from "./drizzle";
-import { researcher, university, affiliation, typePublication, paper, article, contribution, NewResearcher, NewUniversity, NewAffiliation, NewTypePublication, NewPaper, NewArticle, NewContribution } from "./schema";
-import { and, eq, sql } from 'drizzle-orm';
+import {
+    researcher as researcherTable,
+    university as universityTable,
+    affiliation as affiliationTable,
+    typePublication as typePublicationTable,
+    paper as paperTable,
+    article as articleTable,
+    contribution as contributionTable,
+    Researcher,
+    NewResearcher,
+    University,
+    NewUniversity,
+    Affiliation,
+    NewAffiliation,
+    TypePublication,
+    NewTypePublication,
+    Paper,
+    NewPaper,
+    Article,
+    NewArticle,
+    Contribution,
+    NewContribution,
+    article
+} from "./schema";
+import {
+    and,
+    eq,
+    sql,
+    isNull,
+    isNotNull,
+    ExtractTablesWithRelations
+} from 'drizzle-orm';
 import { PgTransaction } from "drizzle-orm/pg-core";
+import { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
 import fetch from 'node-fetch';
 import { parseStringPromise } from 'xml2js';
 
-export function createResearcher(pid: string, last_name: string, first_name: string, ORCID: string, scraped: number, tx?: any) {
-    return (tx ? tx : db).insert(researcher).values({ pid, last_name, first_name, ORCID, scraped } as NewResearcher);
+type Transaction = PgTransaction<PostgresJsQueryResultHKT, typeof import("/home/etudiant/Documents/Cours/R4.C.10/QuiRecherche/lib/db/schema"), ExtractTablesWithRelations<typeof import("/home/etudiant/Documents/Cours/R4.C.10/QuiRecherche/lib/db/schema")>>;
+
+export function createResearcher(pid: string, last_name: string, first_name: string, ORCID: string, scraped: number, tx?: Transaction) {
+    return (tx ? tx : db).insert(researcherTable).values({ pid, last_name, first_name, ORCID, scraped } as NewResearcher);
 }
 
 export async function scrapeResearcher(pid: string) {
@@ -227,166 +260,256 @@ export async function scrapeResearcher(pid: string) {
             scraped: 1
         };
 
-    db.transaction(async (tx) => {
+        db.transaction(async (tx) => {
 
-        // Save researcher data
-        console.log("Saving researcher data...");
-        for (const researcher of researchers) {
-            await createResearcher(researcher.PID, researcher.NOM, researcher.PRENOM, researcher.ORCID, researcher.SCRAPED, tx);
-        }
+            // Save researcher data
+            console.log("Saving researcher data...");
+            for (const researcher of researchers) {
+                await createResearcher(researcher.PID, researcher.NOM, researcher.PRENOM, researcher.ORCID, researcher.SCRAPED, tx);
+            }
+            
+            // Save universities
+            console.log("Saving universities...");
+            const universityIds: Record<string, number> = {};
+            for (const university of universities) {
+                universityIds[university.NOM] = (await createUniversity(university.NOM, tx))[0].id;
+            }
 
-        // Save universities
-        console.log("Saving universities...");
-        const universityIds: Record<string, number> = {};
-        for (const university of universities) {
-            universityIds[university.NOM] = (await createUniversity(university.NOM, tx))[0].id;
-        }
+            // Save affiliations
+            console.log("Saving affiliations...");
+            for (const affiliation of uniqueAffiliations) {
+                const universityId = universityIds[affiliation as string];
+                await createAffiliation(pid, universityId, tx);
+            }
 
-        // Save affiliations
-        console.log("Saving affiliations...");
-        for (const affiliation of uniqueAffiliations) {
-            const universityId = universityIds[affiliation as string];
-            await createAffiliation(pid, universityId, tx);
-        }
+            // Save papers
+            console.log("Saving papers...");
+            const paperIds: Record<string, number> = {};
+            for (const paper of papers) {
+                paperIds[paper.doi] = (await createPaper(paper.doi, paper.titre, paper.venue, paper["TYPE_PUBLICATION.id"], parseInt(paper.year), paper.pages.includes("-") ? parseInt(paper.pages.split('-')[0]) : undefined, paper.pages.includes("-") ? parseInt(paper.pages.split('-')[1]) : undefined, paper.ee, tx))[0].id;
+            }
 
-        // Save papers
-        console.log("Saving papers...");
-        const paperIds: Record<string, number> = {};
-        for (const paper of papers) {
-            paperIds[paper.doi] = (await createPaper(paper.doi, paper.titre, paper.venue, paper["TYPE_PUBLICATION.id"], parseInt(paper.year), paper.pages.includes("-") ? parseInt(paper.pages.split('-')[0]) : undefined, paper.pages.includes("-") ? parseInt(paper.pages.split('-')[1]) : undefined, paper.ee, tx))[0].id;
-        }
+            // Save articles
+            console.log("Saving articles...");
+            for (const article of articles) {
+                await createArticle(paperIds[article["PAPER.id"]], article.number || "", article.volume || "", tx);
+            }
 
-        // Save articles
-        console.log("Saving articles...");
-        for (const article of articles) {
-            await createArticle(paperIds[article["PAPER.id"]], article.number || "", article.volume || "", tx);
-        }
+            // Save contributions
+            console.log("Saving contributions...");
+            for (const contribution of contributions) {
+                await createContributions(contribution["RESEARCHER.PID"], contribution.position, paperIds[contribution["ARTICLE.doi"]], tx);
+            }
 
-        // Save contributions
-        console.log("Saving contributions...");
-        for (const contribution of contributions) {
-            await createContributions(contribution["RESEARCHER.PID"], contribution.position, paperIds[contribution["ARTICLE.doi"]], tx);
-        }
+            console.log("Data saved successfully!");
+        });
 
-        console.log("Data saved successfully!");
-    });
-
-    return author_data;
-} catch (error) {
-    // Handle errors gracefully
-    throw new Error(`Failed to scrape researcher data: ${error}`);
+        return author_data;
+    } catch (error) {
+        // Handle errors gracefully
+        throw new Error(`Failed to scrape researcher data: ${error}`);
+    }
 }
+
+/*
+Donne :
+- Les infos du chercheur
+- Les infos de ses affiliations
+- Les papiers et articles auquel il a participé
+    - Les chercheurs ayant participé au papier
+    - Le type de publication
+*/
+export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
+    const conn = (tx ? tx : db);
+
+    const researcher = await conn
+        .select({
+            pid: researcherTable.pid,
+            last_name: researcherTable.last_name,
+            first_name: researcherTable.first_name,
+            ORCID: researcherTable.ORCID
+        })
+        .from(researcherTable)
+        .where(and(
+            eq(researcherTable.pid, pid),
+            isNull(researcherTable.deletedAt)
+        ));
+    
+    if (researcher.length === 0) {
+        return {
+            error: "Researcher not found"
+        }
+    }
+
+    const universities = await conn
+    .select({
+        id: universityTable.id,
+        name: universityTable.name
+    })
+    .from(universityTable)
+    .innerJoin(affiliationTable, eq(universityTable.id, affiliationTable.universityId))
+    .where(and(
+        eq(affiliationTable.researcherPid, pid),
+        isNull(universityTable.deletedAt),
+        isNull(affiliationTable.deletedAt)
+    ));
+
+    const papers = await conn
+    .select({
+        id: paperTable.id,
+        doi: paperTable.doi,
+        titre: paperTable.titre,
+        venue: paperTable.venue,
+        year: paperTable.year,
+        page_start: paperTable.page_start,
+        page_end: paperTable.page_end,
+        ee: paperTable.ee,
+        typePublication: {
+            name: typePublicationTable.name,
+            abbreviation: typePublicationTable.abbreviation
+        }
+    })
+    .from(paperTable)
+    .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
+    .innerJoin(typePublicationTable, eq(paperTable.typePublicationId, typePublicationTable.id))
+    .where(and(
+        eq(contributionTable.researcherPid, pid),
+        isNull(paperTable.deletedAt),
+        isNull(contributionTable.deletedAt),
+        isNull(typePublicationTable.deletedAt)
+    ));
+
+    const articles = await conn
+    .select({
+        paperId: articleTable.paperId,
+        number: articleTable.number,
+        volume: articleTable.volume
+    })
+    .from(articleTable)
+    .innerJoin(paperTable, eq(articleTable.paperId, paperTable.id))
+    .where(and(
+        isNull(articleTable.deletedAt),
+        isNull(paperTable.deletedAt)
+    ));
+
+    return {
+        researcher: researcher[0],
+        universities,
+        papers,
+        articles
+    };
+    
 }
 
-export function getResearcher(pid: string, tx?: any) {
-    return (tx ? tx : db).select().from(researcher).where(eq(
-        researcher.pid,
+export function getResearcher(pid: string, tx?: Transaction) {
+    return (tx ? tx : db).select().from(researcherTable).where(eq(
+        researcherTable.pid,
         pid
     ));
 }
 
-export function getAllResearchers(tx?: any) {
-    return (tx ? tx : db).select().from(researcher);
+export function getAllResearchers(tx?: Transaction) {
+    return (tx ? tx : db).select().from(researcherTable);
 }
 
-export function updateResearcher(pid: string, last_name?: string, first_name?: string, ORCID?: string, scraped?: number, tx?: any) {
-    return (tx ? tx : db).update(researcher).set({
+export function updateResearcher(pid: string, last_name?: string, first_name?: string, ORCID?: string, scraped?: number, tx?: Transaction) {
+    return (tx ? tx : db).update(researcherTable).set({
         last_name,
         first_name,
         ORCID,
         scraped
-    }).where(eq(researcher.pid, pid));
+    }).where(eq(researcherTable.pid, pid));
 }
 
-export function deleteResearcher(pid: string, tx?: any) {
-    return (tx ? tx : db).update(researcher).set({
+export function deleteResearcher(pid: string, tx?: Transaction) {
+    return (tx ? tx : db).update(researcherTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(eq(researcher.pid, pid));
+    }).where(eq(researcherTable.pid, pid));
 }
 
-export function createUniversity(name: string, tx?: any) {
-    return (tx ? tx : db).insert(university).values({ name } as NewUniversity).returning({ id: university.id });
+export function createUniversity(name: string, tx?: Transaction) {
+    return (tx ? tx : db).insert(universityTable).values({ name } as NewUniversity).returning({ id: universityTable.id });
 }
 
-export function getUniversity(id: number, tx?: any) {
-    return (tx ? tx : db).select().from(university).where(eq(
-        university.id,
+export function getUniversity(id: number, tx?: Transaction) {
+    return (tx ? tx : db).select().from(universityTable).where(eq(
+        universityTable.id,
         id
     ));
 }
 
-export function updateUniversity(id: number, name?: string, tx?: any) {
-    return (tx ? tx : db).update(university).set({
+export function updateUniversity(id: number, name?: string, tx?: Transaction) {
+    return (tx ? tx : db).update(universityTable).set({
         name
-    }).where(eq(university.id, id));
+    }).where(eq(universityTable.id, id));
 }
 
-export function deleteUniversity(id: number, tx?: any) {
-    return (tx ? tx : db).update(university).set({
+export function deleteUniversity(id: number, tx?: Transaction) {
+    return (tx ? tx : db).update(universityTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(eq(university.id, id));
+    }).where(eq(universityTable.id, id));
 }
 
-export function createAffiliation(researcherPid: string, universityId: number, tx?: any) {
-    return (tx ? tx : db).insert(affiliation).values({ researcherPid, universityId } as NewAffiliation);
+export function createAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
+    return (tx ? tx : db).insert(affiliationTable).values({ researcherPid, universityId } as NewAffiliation);
 }
 
-export function getAffiliation(researcherPid: string, universityId: number, tx?: any) {
-    return (tx ? tx : db).select().from(affiliation).where(and(
-        eq(affiliation.researcherPid, researcherPid),
-        eq(affiliation.universityId, universityId)
+export function getAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
+    return (tx ? tx : db).select().from(affiliationTable).where(and(
+        eq(affiliationTable.researcherPid, researcherPid),
+        eq(affiliationTable.universityId, universityId)
     ));
 };
 
 export function getAffiliationByUniversityId(universityId: number, tx?: any) {
-    return (tx ? tx : db).select().from(affiliation).where(eq(
-        affiliation.universityId,
+    return (tx ? tx : db).select().from(affiliationTable).where(eq(
+        affiliationTable.universityId,
         universityId
     ));
 }
 
-export function deleteAffiliation(researcherPid: string, universityId: number, tx?: any) {
-    return (tx ? tx : db).update(affiliation).set({
+export function deleteAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
+    return (tx ? tx : db).update(affiliationTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
     }).where(and(
-        eq(affiliation.researcherPid, researcherPid),
-        eq(affiliation.universityId, universityId)
+        eq(affiliationTable.researcherPid, researcherPid),
+        eq(affiliationTable.universityId, universityId)
     ));
 }
 
-export function createTypePublication(name: string, tx?: any) {
-    return (tx ? tx : db).insert(typePublication).values({ name } as NewTypePublication);
+export function createTypePublication(name: string, tx?: Transaction) {
+    return (tx ? tx : db).insert(typePublicationTable).values({ name } as NewTypePublication);
 }
 
-export function getTypePublication(id: number, tx?: any) {
-    return (tx ? tx : db).select().from(typePublication).where(eq(
-        typePublication.id,
+export function getTypePublication(id: number, tx?: Transaction) {
+    return (tx ? tx : db).select().from(typePublicationTable).where(eq(
+        typePublicationTable.id,
         id
     ));
 }
 
-export function updateTypePublication(id: number, name?: string, tx?: any) {
-    return (tx ? tx : db).update(typePublication).set({
+export function updateTypePublication(id: number, name?: string, tx?: Transaction) {
+    return (tx ? tx : db).update(typePublicationTable).set({
         name
-    }).where(eq(typePublication.id, id));
+    }).where(eq(typePublicationTable.id, id));
 }
 
-export function deleteTypePublication(id: number, tx?: any) {
-    return (tx ? tx : db).update(typePublication).set({
+export function deleteTypePublication(id: number, tx?: Transaction) {
+    return (tx ? tx : db).update(typePublicationTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(eq(typePublication.id, id));
+    }).where(eq(typePublicationTable.id, id));
 }
 
-export function createPaper(doi: string, titre: string, venue: string, typePublicationId: number, year: number, page_start?: number, page_end?: number, ee?: string, tx?: any) {
-    return (tx ? tx : db).insert(paper).values({ doi, titre, venue, typePublicationId, year, page_start, page_end, ee } as NewPaper).returning({ id: paper.id });
+export function createPaper(doi: string, titre: string, venue: string, typePublicationId: number, year: number, page_start?: number, page_end?: number, ee?: string, tx?: Transaction) {
+    return (tx ? tx : db).insert(paperTable).values({ doi, titre, venue, typePublicationId, year, page_start, page_end, ee } as NewPaper).returning({ id: paperTable.id });
 }
 
-export function getPaperFromResearcherPid(researcherPid: string, tx?: any) {
-    return (tx ? tx : db).select().from(paper).join(contribution, eq(paper.id, contribution.paperId)).where(eq(contribution.researcherPid, researcherPid));
+export function getPaperFromResearcherPid(researcherPid: string, tx?: Transaction) {
+    return (tx ? tx : db).select().from(paperTable).innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId)).where(eq(contributionTable.researcherPid, researcherPid));
 }
 
-export function updatePaper(id: number, doi?: string, titre?: string, venue?: string, typePublicationId?: number, year?: number, page_start?: number, page_end?: number, ee?: string, tx?: any) {
-    return (tx ? tx : db).update(paper).set({
+export function updatePaper(id: number, doi?: string, titre?: string, venue?: string, typePublicationId?: number, year?: number, page_start?: number, page_end?: number, ee?: string, tx?: Transaction) {
+    return (tx ? tx : db).update(paperTable).set({
         doi,
         titre,
         venue,
@@ -395,49 +518,48 @@ export function updatePaper(id: number, doi?: string, titre?: string, venue?: st
         page_start,
         page_end,
         ee
-    }).where(eq(paper.id, id));
+    }).where(eq(paperTable.id, id));
 }
 
-export function deletePaper(id: number, tx?: any) {
-    return (tx ? tx : db).update(paper).set({
+export function deletePaper(id: number, tx?: Transaction) {
+    return (tx ? tx : db).update(paperTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(eq(paper.id, id));
+    }).where(eq(paperTable.id, id));
 }
 
-export function createArticle(paperId: number, number: string, volume: string, tx?: any) {
-    return (tx ? tx : db).insert(article).values({ paperId, number: number, volume: volume } as NewArticle);
+export function createArticle(paperId: number, number: string, volume: string, tx?: Transaction) {
+    return (tx ? tx : db).insert(articleTable).values({ paperId, number: number, volume: volume } as NewArticle);
 }
 
-export function getArticle(id: number, tx?: any) {
-    return (tx ? tx : db).select().from(article).where(eq(
-        article.id,
+export function getArticle(id: number, tx?: Transaction) {
+    return (tx ? tx : db).select().from(articleTable).where(eq(
+        articleTable.id,
         id
     ));
 }
 
-export function deleteArticle(id: number, tx?: any) {
-    return (tx ? tx : db).update(article).set({
+export function deleteArticle(id: number, tx?: Transaction) {
+    return (tx ? tx : db).update(articleTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(eq(article.id, id));
+    }).where(eq(articleTable.id, id));
 }
 
-export function createContributions(researcherPid: string, position: number, paperId: number, tx?: any) {
-    return (tx ? tx : db).insert(contribution).values({ researcherPid, position, paperId } as NewContribution);
+export function createContributions(researcherPid: string, position: number, paperId: number, tx?: Transaction) {
+    return (tx ? tx : db).insert(contributionTable).values({ researcherPid, position, paperId } as NewContribution);
 }
 
-export function getContribution(researcherPid: string, position: number, tx?: any) {
-    return (tx ? tx : db).select().from(contribution).where(and(
-        eq(contribution.researcherPid, researcherPid),
-        eq(contribution.position, position)
+export function getContribution(researcherPid: string, position: number, tx?: Transaction) {
+    return (tx ? tx : db).select().from(contributionTable).where(and(
+        eq(contributionTable.researcherPid, researcherPid),
+        eq(contributionTable.position, position)
     ));
 }
 
-export function deleteContribution(researcherPid: string, position: number, tx?: any) {
-    return (tx ? tx : db).update(contribution).set({
+export function deleteContribution(researcherPid: string, position: number, tx?: Transaction) {
+    return (tx ? tx : db).update(contributionTable).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,
     }).where(and(
-        eq(contribution.researcherPid, researcherPid),
-        eq(contribution.position, position)
+        eq(contributionTable.researcherPid, researcherPid),
+        eq(contributionTable.position, position)
     ));
 }
-
