@@ -16,16 +16,23 @@ export default function Publication({
   dblp,
   year,
   ee,
+  number,
+  volume,
 }: {
   title: string;
   type: string;
-  researchers: string[];
+  researchers: (
+    | string
+    | { pid: string; first_name: string; last_name: string }
+  )[];
   doi: string;
   pages: string;
   acronym: string;
   dblp: string;
   year: number;
   ee: string;
+  number?: number;
+  volume?: number;
 }) {
   return (
     <div>
@@ -62,13 +69,27 @@ export default function Publication({
               <span className="font-bold mb-2">They've worked on it</span>{" "}
               <div>
                 {/* <span className="fi fi-is rounded-[1px]"></span>  */}
-                {researchers.map((researcher, index) => (
-                  <span key={researcher} className="inline-block">
-                    {researcher}
-                    {index < researchers.length - 1 && ", "}
-                    &nbsp;
-                  </span>
-                ))}
+                {researchers.map((researcher, index) =>
+                  typeof researcher === "string" ? (
+                    <a
+                      href="{researcher/researcher.pid}"
+                      className="inline-block"
+                    >
+                      {researcher}
+                      {index < researchers.length - 1 && ", "}
+                      &nbsp;
+                    </a>
+                  ) : (
+                    <a
+                      href="/researcher/{researcher.pid}"
+                      className="inline-block"
+                    >
+                      {researcher.first_name} {researcher.last_name}
+                      {index < researchers.length - 1 && ", "}
+                      &nbsp;
+                    </a>
+                  )
+                )}
               </div>
             </div>
             <div className="flex flex-col w-1/2">
@@ -87,6 +108,14 @@ export default function Publication({
                 </a> */}
               </div>
             </div>
+            {/* {if (type==="JOU") { 
+            <div className="flex flex-col w-full">
+              <span>Journal informations</span>
+              <p>Number: {number}</p>
+              <p>Volume: {volume}</p>
+            </div>
+            }
+          } */}
           </AccordionContent>
         </AccordionItem>
       </Accordion>
