@@ -376,6 +376,7 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
             page_start: paperTable.page_start,
             page_end: paperTable.page_end,
             ee: paperTable.ee,
+            dblp: paperTable.dblp_id,
             typePublication: {
                 name: typePublicationTable.name,
                 abbreviation: typePublicationTable.abbreviation
