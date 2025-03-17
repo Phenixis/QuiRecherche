@@ -78,6 +78,13 @@
       "when": 1741698711365,
       "tag": "0010_light_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1742201874064,
+      "tag": "0011_wooden_whiplash",
+      "breakpoints": true
     }
   ]
 }

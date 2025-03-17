@@ -201,6 +201,7 @@ export const researcher = pgTable('researcher', {
 export const affiliation = pgTable(
   'affiliation',
   {
+    id: serial('id').primaryKey(),
     researcherPid: varchar('researcher_id', { length: 255 })
       .notNull()
       .references(() => researcher.pid, { onDelete: "cascade" }),
@@ -210,14 +211,7 @@ export const affiliation = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
     deletedAt: timestamp('deleted_at'),
-  },
-  (affiliation) => [
-    {
-      compositePK: primaryKey({
-        columns: [affiliation.researcherPid, affiliation.universityId],
-      }),
-    },
-  ]
+  }
 );
 
 export const typePublication = pgTable('type_publication', {
@@ -262,6 +256,7 @@ export const article = pgTable('article', {
 export const contribution = pgTable(
   'contribution',
   {
+    id: serial('id').primaryKey(),
     researcherPid: varchar('researcher_id', { length: 255 })
       .notNull()
       .references(() => researcher.pid, { onDelete: "cascade" }),
@@ -272,14 +267,7 @@ export const contribution = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
     deletedAt: timestamp('deleted_at'),
-  },
-  (contribution) => [
-    {
-      compositePK: primaryKey({
-        columns: [contribution.researcherPid, contribution.paperId],
-      }),
-    },
-  ]
+  }
 );
 
 /* RELATIONS */
@@ -379,6 +367,8 @@ export const TicketCommentRelations = relations(ticketComment, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+/* SPECIFIC RELATIONS */
 
 export const UniversityRelations = relations(university, ({ many }) => ({
   affiliations: many(affiliation),

@@ -73,19 +73,7 @@ export async function scrapeResearcher(pid: string) {
         // This might differ depending on the real XML structure from DBLP
         const person = dblpPerson?.person?.[0];
         if (!person) {
-            // No <person> element found, replicating Python's early exit
-            return {
-                pid,
-                authorName,
-                affiliations: [],
-                affiliatedWithIrisa: -1,
-                universities: [],
-                univMap: {},
-                urls: [],
-                papers: [],
-                articles: [],
-                contributions: []
-            };
+            throw new Error("Person node not found in the XML data.");
         }
 
         // Extract affiliations
@@ -103,17 +91,14 @@ export async function scrapeResearcher(pid: string) {
             : -1;
         if (affiliatedWithIrisa === -1) {
             // Replicate Python return if IRISA not found
+            // Prepare the author data to return
+            const firstName = authorName.split(' ')[0];
+            const lastName = authorName.split(' ').slice(1).join(' ');
             return {
                 pid,
-                authorName,
-                affiliations: uniqueAffiliations,
-                affiliatedWithIrisa,
-                universities: [],
-                univMap: {},
-                urls: [],
-                papers: [],
-                articles: [],
-                contributions: []
+                last_name : lastName,
+                first_name: firstName,
+                ORCID: ''
             };
         }
 
@@ -257,14 +242,12 @@ export async function scrapeResearcher(pid: string) {
 
         const author_data = {
             pid,
-            lastName,
-            firstName,
+            last_name: lastName,
+            first_name: firstName,
             ORCID: "",
-            scraped: 1
         };
 
-        db.transaction(async (tx) => {
-
+        await db.transaction(async (tx) => {
             // Save researcher data
             console.log("Saving researcher data...");
             for (const researcher of researchers) {
@@ -335,7 +318,7 @@ Donne :
 export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
     const conn = (tx ? tx : db);
 
-    const researcher = await conn
+    let researcher = await conn
         .select({
             pid: researcherTable.pid,
             last_name: researcherTable.last_name,
@@ -349,9 +332,9 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
         ));
 
     if (researcher.length === 0) {
-        return {
-            error: "Researcher not found"
-        }
+        console.log("Researcher not found");
+        researcher = [await scrapeResearcher(pid)];
+        return await getAllInfosResearcher(pid, tx);
     }
 
     const universities = await conn
