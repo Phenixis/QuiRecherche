@@ -25,11 +25,13 @@ import {
 } from "./schema";
 import {
     and,
+    or,
     eq,
     sql,
     isNull,
     isNotNull,
-    ExtractTablesWithRelations
+    ExtractTablesWithRelations,
+    like
 } from 'drizzle-orm';
 import { PgTransaction } from "drizzle-orm/pg-core";
 import { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
@@ -267,7 +269,7 @@ export async function scrapeResearcher(pid: string) {
             for (const researcher of researchers) {
                 await createResearcher(researcher.PID, researcher.NOM, researcher.PRENOM, researcher.ORCID, researcher.SCRAPED, tx);
             }
-            
+
             // Save universities
             console.log("Saving universities...");
             const universityIds: Record<string, number> = {};
@@ -311,6 +313,16 @@ export async function scrapeResearcher(pid: string) {
     }
 }
 
+export async function searchResearcher(name: string) {
+    const data = await db.select().from(researcherTable).where(or(or(
+        like(researcherTable.last_name, `%${name}%`),
+        like(researcherTable.first_name, `%${name}%`)),
+        like(sql`CONCAT(${researcherTable.first_name}, ' ', ${researcherTable.last_name})`, `%${name}%`))
+    );
+
+    return data;
+}
+
 /*
 Donne :
 - Les infos du chercheur
@@ -334,7 +346,7 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
             eq(researcherTable.pid, pid),
             isNull(researcherTable.deletedAt)
         ));
-    
+
     if (researcher.length === 0) {
         return {
             error: "Researcher not found"
@@ -342,63 +354,89 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
     }
 
     const universities = await conn
-    .select({
-        id: universityTable.id,
-        name: universityTable.name
-    })
-    .from(universityTable)
-    .innerJoin(affiliationTable, eq(universityTable.id, affiliationTable.universityId))
-    .where(and(
-        eq(affiliationTable.researcherPid, pid),
-        isNull(universityTable.deletedAt),
-        isNull(affiliationTable.deletedAt)
-    ));
+        .select({
+            id: universityTable.id,
+            name: universityTable.name
+        })
+        .from(universityTable)
+        .innerJoin(affiliationTable, eq(universityTable.id, affiliationTable.universityId))
+        .where(and(
+            eq(affiliationTable.researcherPid, pid),
+            isNull(universityTable.deletedAt),
+            isNull(affiliationTable.deletedAt)
+        ));
 
     const papers = await conn
-    .select({
-        id: paperTable.id,
-        doi: paperTable.doi,
-        titre: paperTable.titre,
-        venue: paperTable.venue,
-        year: paperTable.year,
-        page_start: paperTable.page_start,
-        page_end: paperTable.page_end,
-        ee: paperTable.ee,
-        typePublication: {
-            name: typePublicationTable.name,
-            abbreviation: typePublicationTable.abbreviation
-        }
-    })
-    .from(paperTable)
-    .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
-    .innerJoin(typePublicationTable, eq(paperTable.typePublicationId, typePublicationTable.id))
-    .where(and(
-        eq(contributionTable.researcherPid, pid),
-        isNull(paperTable.deletedAt),
-        isNull(contributionTable.deletedAt),
-        isNull(typePublicationTable.deletedAt)
-    ));
+        .select({
+            id: paperTable.id,
+            doi: paperTable.doi,
+            titre: paperTable.titre,
+            venue: paperTable.venue,
+            year: paperTable.year,
+            page_start: paperTable.page_start,
+            page_end: paperTable.page_end,
+            ee: paperTable.ee,
+            typePublication: {
+                name: typePublicationTable.name,
+                abbreviation: typePublicationTable.abbreviation
+            }
+        })
+        .from(paperTable)
+        .innerJoin(typePublicationTable, eq(paperTable.typePublicationId, typePublicationTable.id))
+        .where(and(
+            isNull(paperTable.deletedAt),
+            isNull(typePublicationTable.deletedAt)
+        )) as Array<{
+            id: number;
+            doi: string | null;
+            titre: string;
+            venue: string | null;
+            year: number;
+            page_start: number | null;
+            page_end: number | null;
+            ee: string | null;
+            typePublication: { name: string; abbreviation: string };
+            authors?: Array<{ pid: string; last_name: string; first_name: string }>;
+            article?: { number: string; volume: string };
+        }>;
 
-    const articles = await conn
-    .select({
-        paperId: articleTable.paperId,
-        number: articleTable.number,
-        volume: articleTable.volume
-    })
-    .from(articleTable)
-    .innerJoin(paperTable, eq(articleTable.paperId, paperTable.id))
-    .where(and(
-        isNull(articleTable.deletedAt),
-        isNull(paperTable.deletedAt)
-    ));
+    for (const paper of papers) {
+        const authors = await conn
+            .select({
+                pid: researcherTable.pid,
+                last_name: researcherTable.last_name,
+                first_name: researcherTable.first_name
+            })
+            .from(researcherTable)
+            .innerJoin(contributionTable, eq(researcherTable.pid, contributionTable.researcherPid))
+            .where(and(
+                eq(contributionTable.paperId, paper.id),
+                isNull(researcherTable.deletedAt),
+                isNull(contributionTable.deletedAt)
+            ));
+
+        paper.authors = authors;
+
+        const paperInfo = await conn
+            .select({
+                id: articleTable.id,
+                number: articleTable.number,
+                volume: articleTable.volume
+            })
+            .from(articleTable)
+            .where(eq(articleTable.paperId, paper.id));
+
+        if (paperInfo.length > 0) {
+            paper.article = paperInfo[0];
+        }
+    }
 
     return {
         researcher: researcher[0],
         universities,
-        papers,
-        articles
+        papers
     };
-    
+
 }
 
 export function getResearcher(pid: string, tx?: Transaction) {
