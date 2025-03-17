@@ -5,6 +5,7 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 
 export default function Publication({
 	title,
@@ -83,12 +84,12 @@ export default function Publication({
 										<span
 											key={index}
 										>
-											<a
+											<Link
 												href={`/researcher/${researcher.pid}`}
 												className="text-blue-500 underline"
 											>
 												{researcher.first_name} {researcher.last_name}
-											</a>
+											</Link>
 											{index < researchers.length - 1 && ", "}
 										</span>
 									)

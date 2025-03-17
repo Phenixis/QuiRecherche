@@ -34,7 +34,7 @@ export default function GlobalError({
                                 href="/"
                                 className="max-w-48 flex justify-center py-2 px-4 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                             >
-                                go home
+                                Go home
                             </Link>
                         </div>
                     </div>
