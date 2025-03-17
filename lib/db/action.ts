@@ -338,6 +338,13 @@ export function getAffiliation(researcherPid: string, universityId: number, tx?:
     ));
 };
 
+export function getAffiliationByUniversityId(universityId: number, tx?: any) {
+    return (tx ? tx : db).select().from(affiliation).where(eq(
+        affiliation.universityId,
+        universityId
+    ));
+}
+
 export function deleteAffiliation(researcherPid: string, universityId: number, tx?: any) {
     return (tx ? tx : db).update(affiliation).set({
         deletedAt: sql`CURRENT_TIMESTAMP`,

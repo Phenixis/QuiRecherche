@@ -15,6 +15,7 @@ export default function Publication({
   acronym,
   dblp,
   year,
+  ee,
 }: {
   title: string;
   type: string;
@@ -24,6 +25,7 @@ export default function Publication({
   acronym: string;
   dblp: string;
   year: number;
+  ee: string;
 }) {
   return (
     <div>
@@ -31,7 +33,23 @@ export default function Publication({
         <AccordionItem value="item-1">
           <AccordionTrigger>
             <div className="group space-x-4">
-              <Badge variant={type as "default" | "C&W" | "JOU" | "D&A" | "I&O" | "secondary" | "destructive" | "outline" | null | undefined}>{type}</Badge>
+              <Badge
+                variant={
+                  type as
+                    | "default"
+                    | "C&W"
+                    | "JOU"
+                    | "D&A"
+                    | "I&O"
+                    | "secondary"
+                    | "destructive"
+                    | "outline"
+                    | null
+                    | undefined
+                }
+              >
+                {type}
+              </Badge>
               <span className="">{year}</span>
               {/* <span className="fi fi-jp rounded-[1px] border border-gray-100"></span> */}
               <span className="font-black group-hover:underline">{title}</span>
@@ -56,13 +74,15 @@ export default function Publication({
               <p>Pages : {pages}</p>
               <p>Venue : {acronym}</p>
               <div>
-                <a href="{doi}" className="text-blue-500 underline">
-                  DOI +
-                </a>
+                {ee !== "" && (
+                  <a href={ee} className="text-blue-500 underline">
+                    DOI +
+                  </a>
+                )}
                 <span> </span>
-                <a href="{dblp}" className="text-blue-500 underline">
+                {/* <a href={dblp} className="text-blue-500 underline">
                   DBLP +
-                </a>
+                </a> */}
               </div>
             </div>
           </AccordionContent>
