@@ -25,6 +25,7 @@ export default function Page() {
           acronym="ACM"
           year={2021}
           dblp="https://dblp.org/rec/conf/mm/KhanDHBLVOJOT21"
+          ee="https://example.com"
         />
         <Publication
           title="Multi-Dimensional Exploration of Media Collection Metadata"
@@ -37,6 +38,7 @@ export default function Page() {
           acronym="ACM"
           year={2021}
           dblp="https://dblp.org/rec/conf/mm/KhanDHBLVOJOT21"
+          ee="https://example.com"
         />
         <GlobeComponent className="max-h-96 max-w-96" />
       </div>
