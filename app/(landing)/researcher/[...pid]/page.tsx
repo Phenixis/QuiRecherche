@@ -1,7 +1,7 @@
 import Publication from "@/app/(landing)/test/publication";
 import { getAllInfosResearcher } from "@/lib/db/action";
 
-export default async function Page({ params }: { params: { pid: string[] } }) {
+export default async function Page({ params }: { params: Promise<{ pid: string[] }> }) {
 	const pid = (await params).pid ? (await params).pid.join("/") : "";
 	let data;
 

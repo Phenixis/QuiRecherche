@@ -23,5 +23,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(scrape_result);
     }
 
-    return new Response(JSON.stringify("No researcher found"), {status: 404, statusText: "Not Found"});
+    return new NextResponse(JSON.stringify("No researcher found"), {status: 404, statusText: "Not Found"});
 }
