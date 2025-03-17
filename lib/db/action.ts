@@ -94,6 +94,14 @@ export async function scrapeResearcher(pid: string) {
             // Prepare the author data to return
             const firstName = authorName.split(' ')[0];
             const lastName = authorName.split(' ').slice(1).join(' ');
+
+            const inDb = await getResearcher(pid);
+            if (inDb.length > 0) {
+                await updateResearcher(pid, lastName, firstName, '', -1);
+            } else {
+                await createResearcher(pid, lastName, firstName, '', -1);
+            }
+
             return {
                 pid,
                 last_name : lastName,
@@ -295,6 +303,13 @@ export async function scrapeResearcher(pid: string) {
             console.log("Data saved successfully!");
         });
 
+        for (const contribution of contributions) {
+            const author = await getResearcher(contribution["RESEARCHER.PID"]);
+            if (author[0].scraped === -2) {
+                scrapeResearcher(contribution["RESEARCHER.PID"]);
+            }
+        }
+
         return author_data;
     } catch (error) {
         // Handle errors gracefully
@@ -342,7 +357,7 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
         researcher = [await scrapeResearcher(pid)];
     } else if (researcher[0].scraped === -2) {
         console.log("Researcher not scraped");
-        researcher = [await scrapeResearcher(pid)];
+        await scrapeResearcher(pid)
     }
 
     const universities = await conn
@@ -376,9 +391,12 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
         })
         .from(paperTable)
         .innerJoin(typePublicationTable, eq(paperTable.typePublicationId, typePublicationTable.id))
+        .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
         .where(and(
             isNull(paperTable.deletedAt),
-            isNull(typePublicationTable.deletedAt)
+            isNull(typePublicationTable.deletedAt),
+            isNull(contributionTable.deletedAt),
+            eq(contributionTable.researcherPid, pid)
         )) as Array<{
             id: number;
             doi: string | null;
@@ -389,7 +407,7 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
             page_end: number | null;
             ee: string | null;
             typePublication: { name: string; abbreviation: string };
-            authors?: Array<{ pid: string; last_name: string; first_name: string }>;
+            authors?: Array<{ pid: string; last_name: string; first_name: string, scraped: number }>;
             article?: { number: string; volume: string };
         }>;
 
@@ -398,7 +416,8 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
             .select({
                 pid: researcherTable.pid,
                 last_name: researcherTable.last_name,
-                first_name: researcherTable.first_name
+                first_name: researcherTable.first_name,
+                scraped: researcherTable.scraped
             })
             .from(researcherTable)
             .innerJoin(contributionTable, eq(researcherTable.pid, contributionTable.researcherPid))
