@@ -7,48 +7,41 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, isNull, isNotNull } from "drizzle-orm";
 import Publication from "@/app/(landing)/test/publication";
+import { getAllInfosResearcher } from "@/lib/db/action";
+import { getAllResearchers } from "@/lib/db/action";
 
 export default async function Page({ params }: { params: { pid: string[] } }) {
   const pid = params.pid ? params.pid.join("/") : "";
-  const data = await db
-    .select()
-    .from(researcher)
-    .where(eq(researcher.pid, pid));
+  const data = await getAllInfosResearcher(pid);
 
-  const papers = await db
-    .select()
-    .from(paper)
-    .innerJoin(contribution, eq(paper.id, contribution.paperId))
-    .where(
-      and(
-        eq(contribution.researcherPid, pid),
-        isNotNull(contribution.researcherPid)
-      )
-    );
-
-  const type_publi = await db.select().from(typePublication);
+  if (!(data.researcher && data.universities && data.papers && data.articles)) {
+    return <div>{data.error}</div>;
+  }
 
   return (
     <main className="flex flex-col min-h-screen items-center justify-center p-4">
+      {/* <pre>{JSON.stringify(data, null, 2)}</pre> */}
       <div className="w-full max-w-4xl space-y-4">
-        <h1>Page {pid}</h1>
-        {papers.map(({ paper, contribution }) => (
-          <Publication
-            key={paper.id}
-            title={paper.titre}
-            type={
-              type_publi.find((tp) => tp.id === paper.typePublicationId)
-                ?.abbreviation || ""
-            }
-            researchers={["TEST", "Test2"]}
-            doi={paper.doi || ""}
-            pages={paper.page_start + "-" + paper.page_end}
-            acronym={paper.venue || ""}
-            year={paper.year}
-            dblp={paper.dblp_id || ""}
-            ee={paper.ee || ""}
-          />
-        ))}
+        <h1 className="text-2xl font-bold">
+          Publication de {data.researcher?.first_name}{" "}
+          {data.researcher.last_name}
+        </h1>
+        <h1 className="text-2xl">{data.universities[0].name}</h1>
+        <div>
+          {data.papers.map((paper) => (
+            <Publication
+              title={paper.titre}
+              type={paper.typePublication.abbreviation}
+              researchers={["TEST", "test"]}
+              doi={paper.doi || ""}
+              pages={paper.page_start + "-" + paper.page_end}
+              acronym={paper.venue || ""}
+              dblp={"test"}
+              year={paper.year}
+              ee={paper.ee || ""}
+            />
+          ))}
+        </div>
       </div>
     </main>
   );

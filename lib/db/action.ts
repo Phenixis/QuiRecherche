@@ -36,7 +36,7 @@ import { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
 import fetch from 'node-fetch';
 import { parseStringPromise } from 'xml2js';
 
-type Transaction = PgTransaction<PostgresJsQueryResultHKT, typeof import("/home/etudiant/Documents/Cours/R4.C.10/QuiRecherche/lib/db/schema"), ExtractTablesWithRelations<typeof import("/home/etudiant/Documents/Cours/R4.C.10/QuiRecherche/lib/db/schema")>>;
+type Transaction = PgTransaction<PostgresJsQueryResultHKT, typeof import("@/lib/db/schema"), ExtractTablesWithRelations<typeof import("@/lib/db/schema")>>;
 
 export function createResearcher(pid: string, last_name: string, first_name: string, ORCID: string, scraped: number, tx?: Transaction) {
     return (tx ? tx : db).insert(researcherTable).values({ pid, last_name, first_name, ORCID, scraped } as NewResearcher);
