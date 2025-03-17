@@ -1,4 +1,4 @@
-import Publication from "@/app/(landing)/test/publication";
+import Publication from "@/components/publication";
 import { getAllInfosResearcher } from "@/lib/db/action";
 
 export default async function Page({ params }: { params: Promise<{ pid: string[] }> }) {
