@@ -32,7 +32,7 @@ export default async function Page({ params }: { params: { pid: string[] } }) {
             <Publication
               title={paper.titre}
               type={paper.typePublication.abbreviation}
-              researchers={paper.authors?.map()} // TODO: afficher les vrais chercheurs
+              researchers={paper.authors || ["Auteurs introuvables"]} // TODO: afficher les vrais chercheurs
               doi={paper.doi || ""}
               pages={paper.page_start + "-" + paper.page_end}
               acronym={paper.venue || ""}
