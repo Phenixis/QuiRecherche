@@ -71,17 +71,16 @@ export default function Publication({
                 {/* <span className="fi fi-is rounded-[1px]"></span>  */}
                 {researchers.map((researcher, index) =>
                   typeof researcher === "string" ? (
-                    <a
-                      href="{researcher/researcher.pid}"
+                    <div
                       className="inline-block"
                     >
                       {researcher}
                       {index < researchers.length - 1 && ", "}
                       &nbsp;
-                    </a>
+                    </div>
                   ) : (
                     <a
-                      href="/researcher/{researcher.pid}"
+                      href={`/researcher/${researcher.pid}`}
                       className="inline-block"
                     >
                       {researcher.first_name} {researcher.last_name}

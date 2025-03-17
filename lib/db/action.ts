@@ -98,7 +98,8 @@ export async function scrapeResearcher(pid: string) {
                 pid,
                 last_name : lastName,
                 first_name: firstName,
-                ORCID: ''
+                ORCID: '',
+                scraped: -1
             };
         }
 
@@ -246,9 +247,12 @@ export async function scrapeResearcher(pid: string) {
             last_name: lastName,
             first_name: firstName,
             ORCID: "",
+            scraped: 1
         };
 
         await db.transaction(async (tx) => {
+            // tx.rollback();
+
             // Save researcher data
             console.log("Saving researcher data...");
             for (const researcher of researchers) {
@@ -324,7 +328,8 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
             pid: researcherTable.pid,
             last_name: researcherTable.last_name,
             first_name: researcherTable.first_name,
-            ORCID: researcherTable.ORCID
+            ORCID: researcherTable.ORCID,
+            scraped: researcherTable.scraped
         })
         .from(researcherTable)
         .where(and(
@@ -334,6 +339,9 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
 
     if (researcher.length === 0) {
         console.log("Researcher not found");
+        researcher = [await scrapeResearcher(pid)];
+    } else if (researcher[0].scraped === -2) {
+        console.log("Researcher not scraped");
         researcher = [await scrapeResearcher(pid)];
     }
 
@@ -568,7 +576,7 @@ export async function deleteArticle(id: number, tx?: Transaction) {
 }
 
 export async function createContributions(researcherPid: string, position: number, paperId: number, tx?: Transaction) {
-    const alreadyExists = await getContribution(researcherPid, position, tx);
+    const alreadyExists = await getContribution(researcherPid, paperId, tx);
 
     if (alreadyExists.length > 0) {
         return;
@@ -577,10 +585,10 @@ export async function createContributions(researcherPid: string, position: numbe
     return await (tx ? tx : db).insert(contributionTable).values({ researcherPid, position, paperId } as NewContribution);
 }
 
-export async function getContribution(researcherPid: string, position: number, tx?: Transaction) {
+export async function getContribution(researcherPid: string, paperId: number, tx?: Transaction) {
     return await (tx ? tx : db).select().from(contributionTable).where(and(
         eq(contributionTable.researcherPid, researcherPid),
-        eq(contributionTable.position, position)
+        eq(contributionTable.paperId, paperId)
     ));
 }
 
