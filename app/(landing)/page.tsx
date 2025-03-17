@@ -1,11 +1,14 @@
-import { getAllInfosResearcher } from "@/lib/db/action"
+import Search from "@/components/big/search"
+import Logo from "@/components/big/logo"
 
 export default async function HomePage() {
-    const result = await getAllInfosResearcher("11/2374");
 
     return (
-        <pre>
-            {JSON.stringify(result, null, 2)}
-        </pre>
+        <main className="flex flex-col items-center justify-center h-full">
+            <div className="w-full max-w-7xl flex flex-col items-center justify-center h-full">
+                <Logo size={98} className="mb-4" />
+                <Search className="max-w-3xl" placeholder="Search for a researcher or a paper" />
+            </div>
+        </main>
     )
 }
