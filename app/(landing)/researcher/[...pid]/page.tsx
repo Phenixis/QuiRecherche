@@ -14,10 +14,6 @@ export default async function Page({ params }: { params: { pid: string[] } }) {
   const pid = (await params).pid ? (await params).pid.join("/") : "";
   const data = await getAllInfosResearcher(pid);
 
-  if (!(data.researcher && data.universities && data.papers)) {
-    return <div>{data.error}</div>;
-  }
-
   return (
     <main className="flex flex-col min-h-screen items-center justify-center p-4">
       <pre>{JSON.stringify(data, null, 2)}</pre>
