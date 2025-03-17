@@ -118,7 +118,7 @@ export async function scrapeResearcher(pid: string) {
         const researchers: Array<{ PID: string; NOM: string; PRENOM: string; ORCID: string; SCRAPED: number }> = [
             {
                 PID: pid,
-                NOM: authorName.split(' ')[1],
+                NOM: authorName.split(' ').slice(1).join(' '),
                 PRENOM: authorName.split(' ')[0],
                 ORCID: '',
                 SCRAPED: 1
@@ -160,7 +160,8 @@ export async function scrapeResearcher(pid: string) {
                 authorElems.forEach((auth: any, idx: number) => {
                     const pidAttr = auth.$?.pid ?? "";
                     const authorName = auth._ ?? "";
-                    const [firstName, lastName] = authorName.split(' ');
+                    const firstName = authorName.split(' ')[0];
+                    const lastName = authorName.split(' ').slice(1).join(' ');
                     contributions.push({
                         "RESEARCHER.PID": pidAttr,
                         "ARTICLE.doi": doi,
@@ -334,7 +335,6 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
     if (researcher.length === 0) {
         console.log("Researcher not found");
         researcher = [await scrapeResearcher(pid)];
-        return await getAllInfosResearcher(pid, tx);
     }
 
     const universities = await conn
