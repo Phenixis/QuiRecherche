@@ -16,7 +16,17 @@ export default function GlobeComponent({ className }: { className?: string }) {
     const maxValue = Math.max(...pointsData.map((d) => d.value));
 
     // Fonction pour interpoler la couleur entre jaune et rouge
-    const getColor = (value) => {
+    interface PointData {
+      lat: number;
+      lng: number;
+      value: number;
+    }
+
+    interface HexBinData {
+      sumWeight: number;
+    }
+
+    const getColor = (value: number): string => {
       const ratio = value / maxValue; // Normalisation entre 0 et 1
       const r = Math.floor(255); // Rouge constant
       const g = Math.floor(255 * (1 - ratio)); // Moins de vert avec des valeurs élevées
@@ -33,9 +43,9 @@ export default function GlobeComponent({ className }: { className?: string }) {
         )
         .enablePointerInteraction(true)
         .hexBinPointsData(pointsData)
-        .hexBinPointLat((d) => d.lat)
-        .hexBinPointLng((d) => d.lng)
-        .hexBinPointWeight((d) => d.value)
+        .hexBinPointLat((d: object) => (d as PointData).lat)
+        .hexBinPointLng((d: object) => (d as PointData).lng)
+        .hexBinPointWeight((d: object) => (d as PointData).value)
         .hexBinResolution(3) // Plus la résolution est basse, plus les hexagones sont grands
         .hexMargin(0.1)
         .hexTopColor((d) => getColor(d.sumWeight))
