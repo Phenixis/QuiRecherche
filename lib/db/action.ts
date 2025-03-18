@@ -41,7 +41,9 @@ import { parseStringPromise } from 'xml2js';
 type Transaction = PgTransaction<PostgresJsQueryResultHKT, typeof import("@/lib/db/schema"), ExtractTablesWithRelations<typeof import("@/lib/db/schema")>>;
 
 export async function createResearcher(pid: string, last_name: string, first_name: string, ORCID: string, scraped: number, tx?: Transaction) {
-    return await (tx ? tx : db).insert(researcherTable).values({ pid, last_name, first_name, ORCID, scraped } as NewResearcher);
+    return await (tx ? tx : db)
+        .insert(researcherTable)
+        .values({ pid, last_name, first_name, ORCID, scraped } as NewResearcher);
 }
 
 export async function scrapeResearcher(pid: string) {
@@ -104,7 +106,7 @@ export async function scrapeResearcher(pid: string) {
 
             return {
                 pid,
-                last_name : lastName,
+                last_name: lastName,
                 first_name: firstName,
                 ORCID: '',
                 scraped: -1
@@ -318,11 +320,13 @@ export async function scrapeResearcher(pid: string) {
 }
 
 export async function searchResearcher(name: string) {
-    const data = await db.select().from(researcherTable).where(or(or(
-        like(researcherTable.last_name, `%${name}%`),
-        like(researcherTable.first_name, `%${name}%`)),
-        like(sql`CONCAT(${researcherTable.first_name}, ' ', ${researcherTable.last_name})`, `%${name}%`))
-    );
+    const data = await db.select()
+        .from(researcherTable)
+        .where(or(or(
+            like(researcherTable.last_name, `%${name}%`),
+            like(researcherTable.first_name, `%${name}%`)),
+            like(sql`CONCAT(${researcherTable.first_name}, ' ', ${researcherTable.last_name})`, `%${name}%`))
+        );
 
     return data;
 }
@@ -452,146 +456,304 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
 }
 
 export async function getResearcher(pid: string, tx?: Transaction) {
-    return await (tx ? tx : db).select().from(researcherTable).where(eq(
-        researcherTable.pid,
-        pid
-    ));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    return await (tx ? tx : db)
+        .select()
+        .from(researcherTable)
+        .where(eq(
+            researcherTable.pid,
+            pid
+        ));
 }
 
 export async function getAllResearchers(tx?: Transaction) {
-    return await (tx ? tx : db).select().from(researcherTable);
+    return await (tx ? tx : db)
+        .select()
+        .from(researcherTable);
 }
 
 export async function updateResearcher(pid: string, last_name?: string, first_name?: string, ORCID?: string, scraped?: number, tx?: Transaction) {
-    return await (tx ? tx : db).update(researcherTable).set({
-        last_name,
-        first_name,
-        ORCID,
-        scraped
-    }).where(eq(researcherTable.pid, pid));
+    return await (tx ? tx : db)
+        .update(researcherTable)
+        .set({
+            last_name,
+            first_name,
+            ORCID,
+            scraped
+        })
+        .where(eq(researcherTable.pid, pid));
 }
 
 export async function deleteResearcher(pid: string, tx?: Transaction) {
-    return await (tx ? tx : db).update(researcherTable).set({
-        deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(eq(researcherTable.pid, pid));
+    return await (tx ? tx : db)
+        .update(researcherTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(researcherTable.pid, pid));
 }
 
 export async function createUniversity(name: string, tx?: Transaction) {
-    return await (tx ? tx : db).insert(universityTable).values({ name } as NewUniversity).returning({ id: universityTable.id });
+    return await (tx ? tx : db)
+        .insert(universityTable)
+        .values({ name } as NewUniversity)
+        .returning({ id: universityTable.id });
 }
 
 export async function getUniversity(id: number, tx?: Transaction) {
-    return await (tx ? tx : db).select().from(universityTable).where(eq(
-        universityTable.id,
-        id
-    ));
+    return await (tx ? tx : db)
+        .select()
+        .from(universityTable)
+        .where(eq(
+            universityTable.id,
+            id
+        ));
+}
+
+export async function getUniversitiesByResearcherPid(researcherPid: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select({
+            id: universityTable.id,
+            name: universityTable.name,
+            createdAt: universityTable.createdAt,
+            updatedAt: universityTable.updatedAt,
+            deletedAt: universityTable.deletedAt
+        })
+        .from(universityTable)
+        .innerJoin(affiliationTable, eq(universityTable.id, affiliationTable.universityId))
+        .where(eq(affiliationTable.researcherPid, researcherPid));
 }
 
 export async function updateUniversity(id: number, name?: string, tx?: Transaction) {
-    return await (tx ? tx : db).update(universityTable).set({
-        name
-    }).where(eq(universityTable.id, id));
+    return await (tx ? tx : db)
+        .update(universityTable)
+        .set({
+            name
+        })
+        .where(eq(universityTable.id, id));
 }
 
 export async function deleteUniversity(id: number, tx?: Transaction) {
-    return await (tx ? tx : db).update(universityTable).set({
-        deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(eq(universityTable.id, id));
+    return await (tx ? tx : db)
+        .update(universityTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(universityTable.id, id));
 }
 
 export async function createAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
-    return await (tx ? tx : db).insert(affiliationTable).values({ researcherPid, universityId } as NewAffiliation);
+    return await (tx ? tx : db)
+        .insert(affiliationTable)
+        .values({ researcherPid, universityId } as NewAffiliation);
 }
 
 export async function getAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
-    return await (tx ? tx : db).select().from(affiliationTable).where(and(
-        eq(affiliationTable.researcherPid, researcherPid),
-        eq(affiliationTable.universityId, universityId)
-    ));
+    return await (tx ? tx : db)
+        .select()
+        .from(affiliationTable)
+        .where(and(
+            eq(affiliationTable.researcherPid, researcherPid),
+            eq(affiliationTable.universityId, universityId)
+        ));
 };
 
 export async function getAffiliationByUniversityId(universityId: number, tx?: any) {
-    return await (tx ? tx : db).select().from(affiliationTable).where(eq(
-        affiliationTable.universityId,
-        universityId
-    ));
+    return await (tx ? tx : db)
+        .select()
+        .from(affiliationTable)
+        .where(eq(
+            affiliationTable.universityId,
+            universityId
+        ));
 }
 
 export async function deleteAffiliation(researcherPid: string, universityId: number, tx?: Transaction) {
-    return await (tx ? tx : db).update(affiliationTable).set({
-        deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(and(
-        eq(affiliationTable.researcherPid, researcherPid),
-        eq(affiliationTable.universityId, universityId)
-    ));
+    return await (tx ? tx : db)
+        .update(affiliationTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(and(
+            eq(affiliationTable.researcherPid, researcherPid),
+            eq(affiliationTable.universityId, universityId)
+        ));
 }
 
 export async function createTypePublication(name: string, tx?: Transaction) {
-    return await (tx ? tx : db).insert(typePublicationTable).values({ name } as NewTypePublication);
+    return await (tx ? tx : db)
+        .insert(typePublicationTable)
+        .values({ name } as NewTypePublication);
 }
 
 export async function getTypePublication(id: number, tx?: Transaction) {
-    return await (tx ? tx : db).select().from(typePublicationTable).where(eq(
-        typePublicationTable.id,
-        id
-    ));
+    return await (tx ? tx : db)
+        .select()
+        .from(typePublicationTable)
+        .where(eq(
+            typePublicationTable.id,
+            id
+        ));
 }
 
 export async function updateTypePublication(id: number, name?: string, tx?: Transaction) {
-    return await (tx ? tx : db).update(typePublicationTable).set({
-        name
-    }).where(eq(typePublicationTable.id, id));
+    return await (tx ? tx : db)
+        .update(typePublicationTable)
+        .set({
+            name
+        })
+        .where(eq(typePublicationTable.id, id));
 }
 
 export async function deleteTypePublication(id: number, tx?: Transaction) {
-    return await (tx ? tx : db).update(typePublicationTable).set({
-        deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(eq(typePublicationTable.id, id));
+    return await (tx ? tx : db)
+        .update(typePublicationTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(typePublicationTable.id, id));
 }
 
 export async function createPaper(doi: string, titre: string, venue: string, typePublicationId: number, year: number, page_start?: number, page_end?: number, ee?: string, tx?: Transaction) {
-    return await (tx ? tx : db).insert(paperTable).values({ doi, titre, venue, typePublicationId, year, page_start, page_end, ee } as NewPaper).returning({ id: paperTable.id });
+    return await (tx ? tx : db)
+        .insert(paperTable)
+        .values({ doi, titre, venue, typePublicationId, year, page_start, page_end, ee } as NewPaper)
+        .returning({ id: paperTable.id });
 }
 
 export async function getPaperFromResearcherPid(researcherPid: string, tx?: Transaction) {
-    return await (tx ? tx : db).select().from(paperTable).innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId)).where(eq(contributionTable.researcherPid, researcherPid));
+    return await (tx ? tx : db)
+        .select()
+        .from(paperTable)
+        .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
+        .where(eq(contributionTable.researcherPid, researcherPid));
+}
+
+export async function getPublicationsByResearcherPid(researcherPid: string, tx?: Transaction) {
+    const conn = (tx ? tx : db);
+
+    const papers = await conn
+        .select({
+            id: paperTable.id,
+            doi: paperTable.doi,
+            titre: paperTable.titre,
+            venue: paperTable.venue,
+            year: paperTable.year,
+            page_start: paperTable.page_start,
+            page_end: paperTable.page_end,
+            ee: paperTable.ee,
+            dblp: paperTable.dblp_id,
+            typePublication: {
+                name: typePublicationTable.name,
+                abbreviation: typePublicationTable.abbreviation
+            }
+        })
+        .from(paperTable)
+        .innerJoin(typePublicationTable, eq(paperTable.typePublicationId, typePublicationTable.id))
+        .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
+        .where(and(
+            isNull(paperTable.deletedAt),
+            isNull(typePublicationTable.deletedAt),
+            isNull(contributionTable.deletedAt),
+            eq(contributionTable.researcherPid, researcherPid)
+        )) as Array<{
+            id: number;
+            doi: string | null;
+            titre: string;
+            venue: string | null;
+            year: number;
+            page_start: number | null;
+            page_end: number | null;
+            ee: string | null;
+            typePublication: { name: string; abbreviation: string };
+            authors?: Array<{ pid: string; last_name: string; first_name: string, scraped: number }>;
+            article?: { number: string; volume: string };
+        }>;
+
+    for (const paper of papers) {
+        const authors = await conn
+            .select({
+                pid: researcherTable.pid,
+                last_name: researcherTable.last_name,
+                first_name: researcherTable.first_name,
+                scraped: researcherTable.scraped
+            })
+            .from(researcherTable)
+            .innerJoin(contributionTable, eq(researcherTable.pid, contributionTable.researcherPid))
+            .where(and(
+                eq(contributionTable.paperId, paper.id),
+                isNull(researcherTable.deletedAt),
+                isNull(contributionTable.deletedAt)
+            ));
+
+        paper.authors = authors;
+
+        const paperInfo = await conn
+            .select({
+                id: articleTable.id,
+                number: articleTable.number,
+                volume: articleTable.volume
+            })
+            .from(articleTable)
+            .where(eq(articleTable.paperId, paper.id));
+
+        if (paperInfo.length > 0) {
+            paper.article = paperInfo[0];
+        }
+    }
+
+    return papers;
 }
 
 export async function updatePaper(id: number, doi?: string, titre?: string, venue?: string, typePublicationId?: number, year?: number, page_start?: number, page_end?: number, ee?: string, tx?: Transaction) {
-    return await (tx ? tx : db).update(paperTable).set({
-        doi,
-        titre,
-        venue,
-        typePublicationId,
-        year,
-        page_start,
-        page_end,
-        ee
-    }).where(eq(paperTable.id, id));
+    return await (tx ? tx : db)
+        .update(paperTable)
+        .set({
+            doi,
+            titre,
+            venue,
+            typePublicationId,
+            year,
+            page_start,
+            page_end,
+            ee
+        })
+        .where(eq(paperTable.id, id));
 }
 
 export async function deletePaper(id: number, tx?: Transaction) {
-    return await (tx ? tx : db).update(paperTable).set({
-        deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(eq(paperTable.id, id));
+    return await (tx ? tx : db)
+        .update(paperTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(paperTable.id, id));
 }
 
 export async function createArticle(paperId: number, number: string, volume: string, tx?: Transaction) {
-    return await (tx ? tx : db).insert(articleTable).values({ paperId, number: number, volume: volume } as NewArticle);
+    return await (tx ? tx : db)
+        .insert(articleTable)
+        .values({ paperId, number: number, volume: volume } as NewArticle);
 }
 
 export async function getArticle(id: number, tx?: Transaction) {
-    return await (tx ? tx : db).select().from(articleTable).where(eq(
-        articleTable.id,
-        id
-    ));
+    return await (tx ? tx : db)
+        .select()
+        .from(articleTable)
+        .where(eq(
+            articleTable.id,
+            id
+        ));
 }
 
 export async function deleteArticle(id: number, tx?: Transaction) {
-    return await (tx ? tx : db).update(articleTable).set({
-        deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(eq(articleTable.id, id));
+    return await (tx ? tx : db)
+        .update(articleTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(articleTable.id, id));
 }
 
 export async function createContributions(researcherPid: string, position: number, paperId: number, tx?: Transaction) {
@@ -601,21 +763,29 @@ export async function createContributions(researcherPid: string, position: numbe
         return;
     }
 
-    return await (tx ? tx : db).insert(contributionTable).values({ researcherPid, position, paperId } as NewContribution);
+    return await (tx ? tx : db)
+        .insert(contributionTable)
+        .values({ researcherPid, position, paperId } as NewContribution);
 }
 
 export async function getContribution(researcherPid: string, paperId: number, tx?: Transaction) {
-    return await (tx ? tx : db).select().from(contributionTable).where(and(
-        eq(contributionTable.researcherPid, researcherPid),
-        eq(contributionTable.paperId, paperId)
-    ));
+    return await (tx ? tx : db)
+        .select()
+        .from(contributionTable)
+        .where(and(
+            eq(contributionTable.researcherPid, researcherPid),
+            eq(contributionTable.paperId, paperId)
+        ));
 }
 
 export async function deleteContribution(researcherPid: string, position: number, tx?: Transaction) {
-    return await (tx ? tx : db).update(contributionTable).set({
-        deletedAt: sql`CURRENT_TIMESTAMP`,
-    }).where(and(
-        eq(contributionTable.researcherPid, researcherPid),
-        eq(contributionTable.position, position)
-    ));
+    return await (tx ? tx : db)
+        .update(contributionTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(and(
+            eq(contributionTable.researcherPid, researcherPid),
+            eq(contributionTable.position, position)
+        ));
 }

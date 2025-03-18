@@ -65,7 +65,7 @@ export default function Publication({
 							</span>
 						</div>
 					</AccordionTrigger>
-					<AccordionContent className="flex space-x-2">
+					<AccordionContent className="flex space-x-2 w-full">
 						<div className="flex flex-col w-1/2">
 							<span className="font-bold mb-2">They've worked on it</span>{" "}
 							<div>
