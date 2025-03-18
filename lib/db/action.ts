@@ -471,6 +471,12 @@ export async function getAllResearchers(tx?: Transaction) {
         .from(researcherTable);
 }
 
+export async function getAllResearchersPID(tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select({ pid: researcherTable.pid })
+        .from(researcherTable);
+}
+
 export async function updateResearcher(pid: string, last_name?: string, first_name?: string, ORCID?: string, scraped?: number, tx?: Transaction) {
     return await (tx ? tx : db)
         .update(researcherTable)
