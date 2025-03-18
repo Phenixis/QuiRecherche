@@ -11,7 +11,9 @@ export default async function Page({
         pid: string[]
     }>
 }) {
-    const pid = (await params).pid ? (await params).pid.join("/") : "";
+    // Attendre la résolution de params avant de l'utiliser
+    const resolvedParams = await params
+    const pid = resolvedParams.pid.join("/")
 
 
     return (
