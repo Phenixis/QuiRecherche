@@ -456,8 +456,6 @@ export async function getAllInfosResearcher(pid: string, tx?: Transaction) {
 }
 
 export async function getResearcher(pid: string, tx?: Transaction) {
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-
     return await (tx ? tx : db)
         .select()
         .from(researcherTable)

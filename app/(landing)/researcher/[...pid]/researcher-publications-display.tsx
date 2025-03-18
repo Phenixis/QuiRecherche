@@ -29,7 +29,6 @@ export default function ResearcherPublicationsDisplay({
         };
     }[]
 }) {
-    console.log(publications === undefined)
     return (
         <section>
             {

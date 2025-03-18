@@ -20,9 +20,9 @@ export default function ResearcherInfoDisplay({
                 )
             }
             {
-                universities === undefined ? (
+                researcher === undefined && universities === undefined ? (
                     <Skeleton className="w-full h-12" />
-                ) : (
+                ) : universities !== undefined && (
                     <h2 className="text-2xl">
                         {universities[0].name}
                     </h2>
