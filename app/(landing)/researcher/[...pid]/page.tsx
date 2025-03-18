@@ -4,16 +4,6 @@ import { Suspense } from "react";
 import ResearcherPublications from "./researcher-publications";
 import ResearcherPublicationsDisplay from "./researcher-publications-display";
 
-export async function generateStaticParams() {
-    const posts = await fetch('/api/researcher/pid').then((res) => res.json())
-   
-    return posts.map((post: {
-        pid: string
-    }) => ({
-      pid: post.pid.split("/")
-    }))
-  }
-
 export default async function Page({
     params
 }: {
