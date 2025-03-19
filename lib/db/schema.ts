@@ -223,21 +223,34 @@ export const typePublication = pgTable('type_publication', {
   deletedAt: timestamp('deleted_at'),
 });
 
+export const universityContribution = pgTable('university_contribution', {
+  id: serial('id').primaryKey(),
+  universityId: integer('university_id')
+    .notNull()
+    .references(() => university.id, { onDelete: "cascade" }),
+  paperId: integer('paper_id')
+    .notNull()
+    .references(() => paper.id, { onDelete: "cascade" }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
 export const paper = pgTable('paper', {
   id: serial('id').primaryKey(),
-  doi: varchar('doi', { length: 255 }),
   titre: varchar('titre', { length: 255 }).notNull(),
-  venue: varchar('venue', { length: 255 }),
   typePublicationId: integer('type_publication_id')
     .notNull()
     .references(() => typePublication.id, { onDelete: "cascade" }),
   year: integer('year').notNull(),
-  page_start: integer('page_start'),
-  page_end: integer('page_end'),
-  ee: varchar('ee', { length: 255 }),
-  dblp_id: varchar('dblp_id', { length: 255 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  doi: varchar('doi', { length: 255 }),
+  venue: varchar('venue', { length: 255 }),
+  page_start: integer('page_start'),
+  page_end: integer('page_end'),
+  ee: varchar('ee', { length: 255 }), // Will now contain a link to the article on Hal or DBLP
+  dblp_id: varchar('dblp_id', { length: 255 }),
   deletedAt: timestamp('deleted_at'),
 });
 
@@ -269,6 +282,8 @@ export const contribution = pgTable(
     deletedAt: timestamp('deleted_at'),
   }
 );
+
+// TODO: Faire une table coordonnées pour l'associer à une université ?
 
 /* RELATIONS */
 
@@ -372,6 +387,7 @@ export const TicketCommentRelations = relations(ticketComment, ({ one }) => ({
 
 export const UniversityRelations = relations(university, ({ many }) => ({
   affiliations: many(affiliation),
+  contributions: many(universityContribution),
 }));
 
 export const ResearcherRelations = relations(researcher, ({ many }) => ({
@@ -401,6 +417,7 @@ export const PaperRelations = relations(paper, ({ one, many }) => ({
   }),
   articles: many(article),
   contributions: many(contribution),
+  universities: many(universityContribution),
 }));
 
 export const ArticleRelations = relations(article, ({ one }) => ({
@@ -417,6 +434,17 @@ export const ContributionRelations = relations(contribution, ({ one }) => ({
   }),
   paper: one(paper, {
     fields: [contribution.paperId],
+    references: [paper.id],
+  }),
+}));
+
+export const UniversityContributionRelations = relations(universityContribution, ({ one }) => ({
+  university: one(university, {
+    fields: [universityContribution.universityId],
+    references: [university.id],
+  }),
+  paper: one(paper, {
+    fields: [universityContribution.paperId],
     references: [paper.id],
   }),
 }));
@@ -459,6 +487,8 @@ export type Article = typeof article.$inferSelect;
 export type NewArticle = typeof article.$inferInsert;
 export type Contribution = typeof contribution.$inferSelect;
 export type NewContribution = typeof contribution.$inferInsert;
+export type UniversityContribution = typeof universityContribution.$inferSelect;
+export type NewUniversityContribution = typeof universityContribution.$inferInsert;
 
 export enum ActivityType {
   SIGN_UP = 'SIGN_UP',

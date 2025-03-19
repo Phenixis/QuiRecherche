@@ -1,5 +1,29 @@
 import { db } from "./drizzle";
 import {
+    researcher as researcherTable,
+    university as universityTable,
+    affiliation as affiliationTable,
+    typePublication as typePublicationTable,
+    paper as paperTable,
+    article as articleTable,
+    contribution as contributionTable,
+    universityContribution as universityContributionTable,
+    Researcher,
+    NewResearcher,
+    University,
+    NewUniversity,
+    Affiliation,
+    NewAffiliation,
+    TypePublication,
+    NewTypePublication,
+    Paper,
+    NewPaper,
+    Article,
+    NewArticle,
+    Contribution,
+    NewContribution,
+    UniversityContribution,
+    NewUniversityContribution
   researcher as researcherTable,
   university as universityTable,
   affiliation as affiliationTable,
@@ -33,6 +57,19 @@ import {
   ExtractTablesWithRelations,
   like,
 } from "drizzle-orm";
+    and,
+    or,
+    eq,
+    sql,
+    isNull,
+    isNotNull,
+    ExtractTablesWithRelations,
+    like,
+    desc,
+    asc,
+    count,
+    inArray
+} from 'drizzle-orm';
 import { PgTransaction } from "drizzle-orm/pg-core";
 import { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
 import fetch from "node-fetch";
@@ -44,6 +81,106 @@ type Transaction = PgTransaction<
   ExtractTablesWithRelations<typeof import("@/lib/db/schema")>
 >;
 
+export async function createResearcher(pid: string, last_name: string, first_name: string, ORCID: string, scraped: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .insert(researcherTable)
+        .values({ pid, last_name, first_name, ORCID, scraped } as NewResearcher)
+        .returning({ pid: researcherTable.pid });
+}
+
+export async function scrapeHalAndSaveInDB() {
+    let nbScraped = 300;
+    let nbArticles = 300;
+    try {
+        while (nbScraped < nbArticles) {
+            const url = `https://api.archives-ouvertes.fr/search/IRISA/?fl=docid,title_s,uri_s,authIdHal_i,authLastName_s,authFirstName_s,instStructName_s,publicationDateY_i&sort=docid+asc&start=${nbScraped}&rows=100`;
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch data: ${response.statusText}`);
+            }
+
+            const data = await response.json() as any
+
+            // nbArticles = data["response"]["numFound"];
+            console.log(`${nbScraped} / ${nbArticles}`);
+            nbScraped += data["response"]["docs"].length;
+
+            const docs = data["response"]["docs"] as {
+                docid: string;
+                title_s: string;
+                uri_s: string;
+                authIdHal_i: number[];
+                authLastName_s: string[];
+                authFirstName_s: string[];
+                instStructName_s: string[];
+                docType_s: string;
+                publicationDateY_i: number;
+            }[];
+
+            await db.transaction(async (tx) => {
+
+                // tx.rollback();
+
+                for (const doc of docs) {
+                    const inDb = await getPaperByName(doc.title_s, tx);
+                    let idPaper;
+                    if (inDb.length === 0) {
+                        idPaper = (await createPaper(
+                            doc.title_s,
+                            6,
+                            doc.publicationDateY_i,
+                            tx,
+                            doc.uri_s,
+                        ))[0].id;
+                    } else {
+                        idPaper = inDb[0].id;
+                    }
+
+                    for (const firstName of doc.authFirstName_s) {
+                        const lastName = doc.authLastName_s[doc.authFirstName_s.indexOf(firstName)];
+                        const ORCID = '';
+                        const scraped = 1;
+
+                        const inDb = await getResearcherByName(lastName, firstName, tx);
+                        let idResearcher;
+                        if (inDb.length > 0) {
+                            idResearcher = inDb[0].pid;
+                        } else {
+                            idResearcher = (await createResearcher("HAL/" + await getLastHalId(tx), lastName, firstName, ORCID, scraped, tx))[0].pid;
+                        }
+
+                        const inDb2 = await getContribution(idResearcher, idPaper, tx);
+                        if (inDb2.length <= 0) {
+                            await createContributions(idResearcher, doc.authFirstName_s.indexOf(firstName), idPaper, tx);
+                        }
+                    }
+
+                    for (const university of doc.instStructName_s) {
+                        const inDb = await getUniversityByName(university, tx);
+                        let idUniversity;
+                        if (inDb.length === 0) {
+                            idUniversity = (await createUniversity(university, tx))[0].id;
+                        } else {
+                            idUniversity = inDb[0].id;
+                        }
+
+                        const inDb2 = await getUniversityContributionByPaperIdAndUniversityId(idPaper, idUniversity, tx);
+                        if (inDb2.length <= 0) {
+                            await createUniversityContribution(idPaper, idUniversity, tx);
+                        }
+                    }
+
+                    console.log("Paper '" + doc.title_s + "'(" + idPaper + ") saved");
+                }
+            })
+        }
+
+        return nbScraped;
+    } catch (error) {
+        console.error("Error fetching data:", error);
+        throw error;
+    }
 export async function createResearcher(
   pid: string,
   last_name: string,
@@ -313,6 +450,22 @@ export async function scrapeResearcher(pid: string) {
         await createAffiliation(pid, universityId, tx);
       }
 
+            // Save papers
+            console.log("Saving papers...");
+            const paperIds: Record<string, number> = {};
+            for (const paper of papers) {
+                paperIds[paper.doi] = (await createPaper(
+                    paper.titre,
+                    paper["TYPE_PUBLICATION.id"],
+                    parseInt(paper.year),
+                    tx,
+                    paper.ee,
+                    paper.doi,
+                    paper.venue,
+                    paper.pages.includes("-") ? parseInt(paper.pages.split('-')[0]) : undefined,
+                    paper.pages.includes("-") ? parseInt(paper.pages.split('-')[1]) : undefined)
+                )[0].id;
+            }
       // Save papers
       console.log("Saving papers...");
       const paperIds: Record<string, number> = {};
@@ -377,22 +530,48 @@ export async function scrapeResearcher(pid: string) {
 
 export async function searchResearcher(name: string) {
   const data = await db
-    .select()
+    .select({
+        pid: researcherTable.pid,
+        last_name: researcherTable.last_name,
+        first_name: researcherTable.first_name,
+        nb_articles: count(contributionTable.paperId),
+    })
     .from(researcherTable)
+        .innerJoin(contributionTable, eq(researcherTable.pid, contributionTable.researcherPid))
+        .groupBy(researcherTable.pid)
     .where(
       or(
         or(
-          like(researcherTable.last_name, `%${name}%`),
-          like(researcherTable.first_name, `%${name}%`)
+          like(sql`LOWER(${researcherTable.last_name})`, `%${name.toLowerCase()}%`),
+          like(sql`LOWER(${researcherTable.first_name})`, `%${name.toLowerCase()}%`)
         ),
         like(
-          sql`CONCAT(${researcherTable.first_name}, ' ', ${researcherTable.last_name})`,
-          `%${name}%`
+          sql`LOWER(CONCAT(${researcherTable.first_name}, ' ', ${researcherTable.last_name}))`,
+          `%${name.toLowerCase()}%`
         )
       )
-    );
+    )
+        .limit(5);
 
   return data;
+}
+
+export async function getLastHalId(tx?: Transaction) {
+    const data = await (tx ? tx : db)
+        .select({ pid: researcherTable.pid })
+        .from(researcherTable)
+        .where(and(
+            like(researcherTable.pid, 'HAL/%'),
+            isNull(researcherTable.deletedAt)
+        ))
+        .orderBy(desc(sql`CAST(SPLIT_PART(${researcherTable.pid}, '/', 2) AS INTEGER)`))
+        .limit(1);
+
+    if (data.length === 0) {
+        return "0";
+    }
+
+    return "" + (parseInt(data[0].pid.split('/')[1]) + 1);
 }
 
 /*
@@ -544,6 +723,28 @@ export async function getResearcher(pid: string, tx?: Transaction) {
     .where(eq(researcherTable.pid, pid));
 }
 
+export async function getResearcherByName(last_name: string, first_name: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(researcherTable)
+        .where(and(
+            eq(researcherTable.last_name, last_name),
+            eq(researcherTable.first_name, first_name),
+            isNull(researcherTable.deletedAt)
+        ));
+}
+
+export async function getResearcherByName(last_name: string, first_name: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(researcherTable)
+        .where(and(
+            eq(researcherTable.last_name, last_name),
+            eq(researcherTable.first_name, first_name),
+            isNull(researcherTable.deletedAt)
+        ));
+}
+
 export async function getAllResearchers(tx?: Transaction) {
   return await (tx ? tx : db).select().from(researcherTable);
 }
@@ -594,6 +795,26 @@ export async function getUniversity(id: number, tx?: Transaction) {
     .select()
     .from(universityTable)
     .where(eq(universityTable.id, id));
+}
+
+export async function getUniversityByName(name: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityTable)
+        .where(eq(
+            universityTable.name,
+            name
+        ));
+}
+
+export async function getUniversityByName(name: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityTable)
+        .where(eq(
+            universityTable.name,
+            name
+        ));
 }
 
 export async function getUniversitiesByResearcherPid(
@@ -753,6 +974,26 @@ export async function createPaper(
     .returning({ id: paperTable.id });
 }
 
+export async function getPaperByName(name: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(paperTable)
+        .where(and(
+            eq(paperTable.titre, name),
+            isNull(paperTable.deletedAt))
+        );
+}
+
+export async function getPaperByName(name: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(paperTable)
+        .where(and(
+            eq(paperTable.titre, name),
+            isNull(paperTable.deletedAt))
+        );
+}
+
 export async function getPaperFromResearcherPid(
   researcherPid: string,
   tx?: Transaction
@@ -764,100 +1005,194 @@ export async function getPaperFromResearcherPid(
     .where(eq(contributionTable.researcherPid, researcherPid));
 }
 
-export type Publication = {
-    id: number;
-    doi: string | null;
-    titre: string;
-    venue: string | null;
-    year: number;
-    page_start: number | null;
-    page_end: number | null;
-    ee: string | null;
-    typePublication: { name: string; abbreviation: string };
-    authors?: Array<{
-      pid: string;
-      last_name: string;
-      first_name: string;
-      scraped: number;
-    }>;
-    article?: { number: string; volume: string };
-  }
+export async function getPublicationsByResearcherPid(researcherPid: string, page = 1, limit = 10, tx?: Transaction) {
+    const conn = tx ? tx : db
+    const offset = (page - 1) * limit
 
-export async function getPublicationsByResearcherPid(
-  researcherPid: string,
-  tx?: Transaction
-) {
-  const conn = tx ? tx : db;
-
-  const papers = (await conn
-    .select({
-      id: paperTable.id,
-      doi: paperTable.doi,
-      titre: paperTable.titre,
-      venue: paperTable.venue,
-      year: paperTable.year,
-      page_start: paperTable.page_start,
-      page_end: paperTable.page_end,
-      ee: paperTable.ee,
-      dblp: paperTable.dblp_id,
-      typePublication: {
-        name: typePublicationTable.name,
-        abbreviation: typePublicationTable.abbreviation,
-      },
-    })
-    .from(paperTable)
-    .innerJoin(
-      typePublicationTable,
-      eq(paperTable.typePublicationId, typePublicationTable.id)
-    )
-    .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
-    .where(
-      and(
-        isNull(paperTable.deletedAt),
-        isNull(typePublicationTable.deletedAt),
-        isNull(contributionTable.deletedAt),
-        eq(contributionTable.researcherPid, researcherPid)
-      )
-    )) as Array<Publication>;
-
-  for (const paper of papers) {
-    const authors = await conn
-      .select({
-        pid: researcherTable.pid,
-        last_name: researcherTable.last_name,
-        first_name: researcherTable.first_name,
-        scraped: researcherTable.scraped,
-      })
-      .from(researcherTable)
-      .innerJoin(
-        contributionTable,
-        eq(researcherTable.pid, contributionTable.researcherPid)
-      )
-      .where(
-        and(
-          eq(contributionTable.paperId, paper.id),
-          isNull(researcherTable.deletedAt),
-          isNull(contributionTable.deletedAt)
+    // First, get the total count of papers for this researcher
+    const countResult = await conn
+        .select({ count: sql<number>`count(distinct ${paperTable.id})` })
+        .from(paperTable)
+        .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
+        .where(
+            and(
+                isNull(paperTable.deletedAt),
+                isNull(contributionTable.deletedAt),
+                eq(contributionTable.researcherPid, researcherPid),
+            ),
         )
-      );
 
-    paper.authors = authors;
+    const totalCount = countResult[0]?.count || 0
 
-    const paperInfo = await conn
-      .select({
-        id: articleTable.id,
-        number: articleTable.number,
-        volume: articleTable.volume,
-      })
-      .from(articleTable)
-      .where(eq(articleTable.paperId, paper.id));
+    // Get paper IDs for this page with proper pagination
+    const paperIds = await conn
+        .select({ id: paperTable.id })
+        .from(paperTable)
+        .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
+        .where(
+            and(
+                isNull(paperTable.deletedAt),
+                isNull(contributionTable.deletedAt),
+                eq(contributionTable.researcherPid, researcherPid),
+            ),
+        )
+        .orderBy(desc(paperTable.year))
+        .limit(limit)
+        .offset(offset)
 
-    if (paperInfo.length > 0) {
-      paper.article = paperInfo[0];
+    // Extract just the IDs
+    const ids = paperIds.map((p) => p.id)
+
+    if (ids.length === 0) {
+        return { publications: [], totalCount }
     }
-  }
 
-  return papers;
+    // Fetch all paper details in a single query
+    const papers = await conn
+        .select({
+            id: paperTable.id,
+            doi: paperTable.doi,
+            titre: paperTable.titre,
+            venue: paperTable.venue,
+            year: paperTable.year,
+            page_start: paperTable.page_start,
+            page_end: paperTable.page_end,
+            ee: paperTable.ee,
+            dblp: paperTable.dblp_id,
+            typePublication: {
+                name: typePublicationTable.name,
+                abbreviation: typePublicationTable.abbreviation,
+            },
+        })
+        .from(paperTable)
+        .innerJoin(typePublicationTable, eq(paperTable.typePublicationId, typePublicationTable.id))
+        .where(and(isNull(paperTable.deletedAt), isNull(typePublicationTable.deletedAt), inArray(paperTable.id, ids)))
+        .orderBy(desc(paperTable.year))
+
+    // Create a map for faster lookups
+    const papersMap = new Map<number, {
+        id: number;
+        doi: string | null;
+        titre: string;
+        venue: string | null;
+        year: number;
+        page_start: number | null;
+        page_end: number | null;
+        ee: string | null;
+        dblp: string | null;
+        typePublication: {
+            name: string;
+            abbreviation: string;
+        };
+        authors: Array<{
+            pid: string;
+            last_name: string;
+            first_name: string;
+            scraped: number;
+        }>;
+        universities: Array<{
+            id: number;
+            name: string;
+        }>;
+        article?: {
+            number: string;
+            volume: string;
+        };
+    }>(
+        papers.map((paper) => [
+            paper.id,
+            {
+                ...paper,
+                authors: [],
+                universities: [],
+            },
+        ]),
+    )
+
+    // Fetch all authors for these papers in a single query
+    const allAuthors = await conn
+        .select({
+            paperId: contributionTable.paperId,
+            pid: researcherTable.pid,
+            last_name: researcherTable.last_name,
+            first_name: researcherTable.first_name,
+            scraped: researcherTable.scraped,
+        })
+        .from(researcherTable)
+        .innerJoin(contributionTable, eq(researcherTable.pid, contributionTable.researcherPid))
+        .where(
+            and(
+                inArray(contributionTable.paperId, ids),
+                isNull(researcherTable.deletedAt),
+                isNull(contributionTable.deletedAt),
+            ),
+        )
+
+    // Group authors by paper
+    for (const author of allAuthors) {
+        const paper = papersMap.get(author.paperId)
+        if (paper) {
+            paper.authors.push({
+                pid: author.pid,
+                last_name: author.last_name,
+                first_name: author.first_name,
+                scraped: author.scraped,
+            })
+        }
+    }
+
+    // Fetch all article info for these papers in a single query
+    const allArticles = await conn
+        .select({
+            paperId: articleTable.paperId,
+            id: articleTable.id,
+            number: articleTable.number,
+            volume: articleTable.volume,
+        })
+        .from(articleTable)
+        .where(inArray(articleTable.paperId, ids))
+
+    // Add article info to papers
+    for (const article of allArticles) {
+        const paper = papersMap.get(article.paperId)
+        if (paper) {
+            paper.article = {
+                number: article.number,
+                volume: article.volume,
+            }
+        }
+    }
+
+    // Fetch all universities for these papers in a single query
+    const allUniversities = await conn
+        .select({
+            paperId: universityContributionTable.paperId,
+            id: universityTable.id,
+            name: universityTable.name,
+        })
+        .from(universityTable)
+        .innerJoin(universityContributionTable, eq(universityTable.id, universityContributionTable.universityId))
+        .where(inArray(universityContributionTable.paperId, ids))
+
+    // Group universities by paper
+    for (const university of allUniversities) {
+        const paper = papersMap.get(university.paperId)
+        if (paper) {
+            paper.universities.push({
+                id: university.id,
+                name: university.name,
+            })
+        }
+    }
+
+    // Convert map back to array, preserving order
+    const result = ids.map((id) => papersMap.get(id)).filter((paper): paper is NonNullable<typeof paper> => paper !== undefined);
+
+    // Return both the paginated papers and the total count
+    return {
+        publications: result,
+        totalCount,
+    }
 }
 
 export async function getPublicationsById(
@@ -1047,4 +1382,142 @@ export async function deleteContribution(
         eq(contributionTable.position, position)
       )
     );
+}
+
+export async function createUniversityContribution(paperId: number, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .insert(universityContributionTable)
+        .values({ paperId, universityId } as NewUniversityContribution)
+        .returning({ id: universityContributionTable.id });
+}
+
+export async function getUniversityContribution(id: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(universityContributionTable.id, id),
+            isNull(universityContributionTable.deletedAt)
+        ));
+}
+
+export async function getUniversityContributionByPaperIdAndUniversityId(paperId: number, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(
+                universityContributionTable.paperId,
+                paperId
+            ),
+            eq(
+                universityContributionTable.universityId,
+                universityId
+            ),
+            isNull(universityContributionTable.deletedAt)));
+}
+
+export async function getUniversityContributionByUniversityId(universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(
+                universityContributionTable.universityId,
+                universityId
+            ),
+            isNull(universityContributionTable.deletedAt)));
+}
+
+export async function getUniversityContributionByPaperId(paperId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(
+                universityContributionTable.paperId,
+                paperId
+            ),
+            isNull(universityContributionTable.deletedAt)));
+}
+
+export async function deleteUniversityContribution(paperId: number, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .update(universityContributionTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(and(
+            eq(universityContributionTable.paperId, paperId),
+            eq(universityContributionTable.universityId, universityId)
+        ));
+}
+
+export async function createUniversityContribution(paperId: number, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .insert(universityContributionTable)
+        .values({ paperId, universityId } as NewUniversityContribution)
+        .returning({ id: universityContributionTable.id });
+}
+
+export async function getUniversityContribution(id: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(universityContributionTable.id, id),
+            isNull(universityContributionTable.deletedAt)
+        ));
+}
+
+export async function getUniversityContributionByPaperIdAndUniversityId(paperId: number, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(
+                universityContributionTable.paperId,
+                paperId
+            ),
+            eq(
+                universityContributionTable.universityId,
+                universityId
+            ),
+            isNull(universityContributionTable.deletedAt)));
+}
+
+export async function getUniversityContributionByUniversityId(universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(
+                universityContributionTable.universityId,
+                universityId
+            ),
+            isNull(universityContributionTable.deletedAt)));
+}
+
+export async function getUniversityContributionByPaperId(paperId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(
+                universityContributionTable.paperId,
+                paperId
+            ),
+            isNull(universityContributionTable.deletedAt)));
+}
+
+export async function deleteUniversityContribution(paperId: number, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .update(universityContributionTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(and(
+            eq(universityContributionTable.paperId, paperId),
+            eq(universityContributionTable.universityId, universityId)
+        ));
 }

@@ -5,12 +5,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const query = searchParams.get("query")
 
-  if (!query) {
-    return NextResponse.json([])
-  }
-
   try {
-    const researchers = await searchResearcher(query)
+    const researchers = await searchResearcher(query || "")
     return NextResponse.json(researchers)
   } catch (error) {
     console.error("Error searching researchers:", error)
