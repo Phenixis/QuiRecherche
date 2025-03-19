@@ -829,9 +829,11 @@ export async function getPublicationsByResearcherPid(researcherPid: string, tx?:
             page_start: number | null;
             page_end: number | null;
             ee: string | null;
+            dblp: string | null;
             typePublication: { name: string; abbreviation: string };
             authors?: Array<{ pid: string; last_name: string; first_name: string, scraped: number }>;
             article?: { number: string; volume: string };
+            universities?: Array<{ id: number; name: string }>;
         }>;
 
     for (const paper of papers) {
@@ -864,6 +866,17 @@ export async function getPublicationsByResearcherPid(researcherPid: string, tx?:
         if (paperInfo.length > 0) {
             paper.article = paperInfo[0];
         }
+
+        const universities = await conn
+            .select({
+                id: universityTable.id,
+                name: universityTable.name
+            })
+            .from(universityTable)
+            .innerJoin(universityContributionTable, eq(universityTable.id, universityContributionTable.universityId))
+            .where(eq(universityContributionTable.paperId, paper.id));
+        
+        paper.universities = universities
     }
 
     return papers;

@@ -10,13 +10,14 @@ import Link from "next/link";
 export default function Publication({
 	title,
 	type,
-	doi,
 	researchers,
+	year,
+	ee,
+	universities,
+	doi,
 	pages,
 	acronym,
 	dblp,
-	year,
-	ee,
 	number,
 	volume,
 }: {
@@ -26,12 +27,16 @@ export default function Publication({
 		| string
 		| { pid: string; first_name: string; last_name: string, scraped: number }
 	)[];
-	doi: string;
-	pages: string;
-	acronym: string;
-	dblp: string;
 	year: number;
 	ee: string;
+	universities?: Array<{
+		id: number;
+		name: string;
+	}>;
+	doi?: string;
+	pages?: string;
+	acronym?: string;
+	dblp?: string;
 	number?: number;
 	volume?: number;
 }) {
@@ -66,44 +71,67 @@ export default function Publication({
 						</div>
 					</AccordionTrigger>
 					<AccordionContent className="flex space-x-2 w-full">
-						<div className="flex flex-col w-1/2">
-							<span className="font-bold mb-2">They've worked on it</span>{" "}
+						<div className="flex flex-col w-1/2 gap-4">
 							<div>
-								{/* <span className="fi fi-is rounded-[1px]"></span>  */}
-								{researchers.map((researcher, index) =>
-									typeof researcher === "string" ? (
-										<span
-											key={index}
-											className="inline-block"
-										>
-											{researcher}
-											{index < researchers.length - 1 && ", "}
-											&nbsp;
-										</span>
-									) : (
-										<span
-											key={index}
-										>
-											<Link
-												href={`/researcher/${researcher.pid}`}
-												className="text-blue-500 underline"
+								<span className="font-bold mb-2">They've worked on it</span>{" "}
+								<div>
+									{researchers.map((researcher, index) =>
+										typeof researcher === "string" ? (
+											<span
+												key={index}
+												className="inline-block"
 											>
-												{researcher.first_name} {researcher.last_name}
-											</Link>
-											{index < researchers.length - 1 && ", "}
-										</span>
-									)
-								)}
+												{researcher}
+												{index < researchers.length - 1 && ", "}
+												&nbsp;
+											</span>
+										) : (
+											<span
+												key={index}
+											>
+												<Link
+													href={`/researcher/${researcher.pid}`}
+													className="text-blue-500 underline"
+												>
+													{researcher.first_name} {researcher.last_name}
+												</Link>
+												{index < researchers.length - 1 && ", "}
+											</span>
+										)
+									)}
+								</div>
 							</div>
+							{
+								(universities && universities.length != 0) && (
+									<div>
+										<span className="font-bold mb-2">Universities Involved</span>{" "}
+										<div>
+											{
+												universities && universities.map((university, index) =>
+													<span key={index}>
+														<Link href={`/university/${university.id}`} className="text-blue-500 underline">
+															{university.name}
+														</Link>
+														{index < universities.length - 1 && ", "}
+													</span>
+												)}
+										</div>
+									</div>
+								)
+							}
 						</div>
 						<div className="flex flex-col w-1/2">
 							<span className="font-bold mb-2">Other informations</span>
-							<p>Pages : {pages}</p>
-							<p>Venue : {acronym}</p>
+							{
+								pages && <p>Pages : {pages}</p>
+							}
+							{
+								acronym && <p>Venue : {acronym}</p>
+							}
 							<div>
 								{ee !== "" && (
-									<a href={ee} className="text-blue-500 underline">
-										DOI +
+									<a href={ee} className="text-blue-500 underline" target="_blank">
+										More info...
 									</a>
 								)}
 								<span> </span>

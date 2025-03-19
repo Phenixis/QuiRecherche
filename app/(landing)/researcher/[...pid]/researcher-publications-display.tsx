@@ -13,6 +13,7 @@ export default function ResearcherPublicationsDisplay({
         page_start: number | null;
         page_end: number | null;
         ee: string | null;
+        dblp: string | null;
         typePublication: {
             name: string;
             abbreviation: string;
@@ -27,6 +28,10 @@ export default function ResearcherPublicationsDisplay({
             number: string;
             volume: string;
         };
+        universities?: Array<{
+            id: number;
+            name: string
+        }>;
     }[]
 }) {
     return (
@@ -43,10 +48,11 @@ export default function ResearcherPublicationsDisplay({
                                     title={publication.titre}
                                     type={publication.typePublication.abbreviation}
                                     researchers={publication.authors || ["Auteurs introuvables"]}
+                                    universities={publication.universities || undefined}
                                     doi={publication.doi || ""}
-                                    pages={publication.page_start + "-" + publication.page_end}
-                                    acronym={publication.venue || ""}
-                                    dblp={"test"}
+                                    pages={(publication.page_start != null && publication.page_end != null) ? (publication.page_start + "-" + publication.page_end) : undefined}
+                                    acronym={publication.venue || undefined}
+                                    dblp={publication.dblp || undefined}
                                     year={publication.year}
                                     ee={publication.ee || ""}
                                 />
