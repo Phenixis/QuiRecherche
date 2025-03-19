@@ -5,7 +5,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 export function useSearch(query: string | null) {
   const { data, error, isLoading } = useSWR(
-    query ? `/api/researcher/search?query=${encodeURIComponent(query)}` : null,
+    query != null ? `/api/researcher/search?query=${encodeURIComponent(query)}` : null,
     fetcher,
   )
 

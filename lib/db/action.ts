@@ -444,7 +444,8 @@ export async function searchResearcher(name: string) {
             like(sql`LOWER(${researcherTable.last_name})`, `%${name.toLowerCase()}%`),
             like(sql`LOWER(${researcherTable.first_name})`, `%${name.toLowerCase()}%`)),
             like(sql`LOWER(CONCAT(${researcherTable.first_name}, ' ', ${researcherTable.last_name}))`, `%${name.toLowerCase()}%`))
-        );
+        )
+        .limit(5);
 
     return data;
 }

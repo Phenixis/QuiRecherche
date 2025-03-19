@@ -4,9 +4,13 @@ import { useSearchParams } from "next/navigation"
 import { useSearch } from "@/hooks/use-search"
 import Link from "next/link"
 
-export default function ResultatsSearch() {
+export default function ResultatsSearch({
+    closeDialog
+}: {
+    closeDialog: () => void
+}) {
     const params = useSearchParams()
-    const query = params.get("query")
+    const query = params.get("query") || ""
     const { researchers, isLoading, isError } = useSearch(query)
 
     return (
@@ -17,11 +21,11 @@ export default function ResultatsSearch() {
                 <div className="p-4 text-center text-red-500">Error loading results</div>
             ) : researchers && researchers.length > 0 ? (
                 <div>
-                    {researchers.slice(0, 5).map((researcher) => (
-                        <Link key={researcher.pid} href={`/researcher/${researcher.pid}`} className="flex items-center justify-between p-4 border-b border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-lg">
+                    {researchers.map((researcher) => (
+                        <Link key={researcher.pid} href={`/researcher/${researcher.pid}`} className="flex items-center justify-between p-4 border-b border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-lg" onClick={closeDialog}>
                             {researcher.first_name} {researcher.last_name}
                             <span className="text-gray-500 text-md">
-                                {researcher.nb_articles} articles
+                                {researcher.nb_articles} article{researcher.nb_articles > 1 ? "s" : ""}
                             </span>
                         </Link>
                     ))}
