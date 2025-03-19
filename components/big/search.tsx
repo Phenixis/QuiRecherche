@@ -40,7 +40,7 @@ export default function Search({
             params.delete('query');
         }
         replace(`${pathname}?${params.toString()}`);
-    }, 300);
+    }, 200);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
