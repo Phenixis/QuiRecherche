@@ -984,7 +984,7 @@ export async function getPublicationsByResearcherPid(researcherPid: string, page
     }
 
     // Convert map back to array, preserving order
-    const result = ids.map((id) => papersMap.get(id)).filter(Boolean)
+    const result = ids.map((id) => papersMap.get(id)).filter((paper): paper is NonNullable<typeof paper> => paper !== undefined);
 
     // Return both the paginated papers and the total count
     return {
