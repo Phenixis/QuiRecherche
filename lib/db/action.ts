@@ -7,6 +7,7 @@ import {
     paper as paperTable,
     article as articleTable,
     contribution as contributionTable,
+    universityContribution as universityContributionTable,
     Researcher,
     NewResearcher,
     University,
@@ -21,7 +22,8 @@ import {
     NewArticle,
     Contribution,
     NewContribution,
-    article
+    UniversityContribution,
+    NewUniversityContribution
 } from "./schema";
 import {
     and,
@@ -31,7 +33,9 @@ import {
     isNull,
     isNotNull,
     ExtractTablesWithRelations,
-    like
+    like,
+    desc,
+    asc,
 } from 'drizzle-orm';
 import { PgTransaction } from "drizzle-orm/pg-core";
 import { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
@@ -43,7 +47,103 @@ type Transaction = PgTransaction<PostgresJsQueryResultHKT, typeof import("@/lib/
 export async function createResearcher(pid: string, last_name: string, first_name: string, ORCID: string, scraped: number, tx?: Transaction) {
     return await (tx ? tx : db)
         .insert(researcherTable)
-        .values({ pid, last_name, first_name, ORCID, scraped } as NewResearcher);
+        .values({ pid, last_name, first_name, ORCID, scraped } as NewResearcher)
+        .returning({ pid: researcherTable.pid });
+}
+
+export async function scrapeHalAndSaveInDB() {
+    let nbScraped = 300;
+    let nbArticles = 300;
+    try {
+        while (nbScraped < nbArticles) {
+            const url = `https://api.archives-ouvertes.fr/search/IRISA/?fl=docid,title_s,uri_s,authIdHal_i,authLastName_s,authFirstName_s,instStructName_s,publicationDateY_i&sort=docid+asc&start=${nbScraped}&rows=100`;
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch data: ${response.statusText}`);
+            }
+
+            const data = await response.json() as any
+
+            // nbArticles = data["response"]["numFound"];
+            console.log(`${nbScraped} / ${nbArticles}`);
+            nbScraped += data["response"]["docs"].length;
+
+            const docs = data["response"]["docs"] as {
+                docid: string;
+                title_s: string;
+                uri_s: string;
+                authIdHal_i: number[];
+                authLastName_s: string[];
+                authFirstName_s: string[];
+                instStructName_s: string[];
+                docType_s: string;
+                publicationDateY_i: number;
+            }[];
+
+            await db.transaction(async (tx) => {
+
+                // tx.rollback();
+
+                for (const doc of docs) {
+                    const inDb = await getPaperByName(doc.title_s, tx);
+                    let idPaper;
+                    if (inDb.length === 0) {
+                        idPaper = (await createPaper(
+                            doc.title_s,
+                            6,
+                            doc.publicationDateY_i,
+                            tx,
+                            doc.uri_s,
+                        ))[0].id;
+                    } else {
+                        idPaper = inDb[0].id;
+                    }
+
+                    for (const firstName of doc.authFirstName_s) {
+                        const lastName = doc.authLastName_s[doc.authFirstName_s.indexOf(firstName)];
+                        const ORCID = '';
+                        const scraped = 1;
+
+                        const inDb = await getResearcherByName(lastName, firstName, tx);
+                        let idResearcher;
+                        if (inDb.length > 0) {
+                            idResearcher = inDb[0].pid;
+                        } else {
+                            idResearcher = (await createResearcher("HAL/" + await getLastHalId(tx), lastName, firstName, ORCID, scraped, tx))[0].pid;
+                        }
+
+                        const inDb2 = await getContribution(idResearcher, idPaper, tx);
+                        if (inDb2.length <= 0) {
+                            await createContributions(idResearcher, doc.authFirstName_s.indexOf(firstName), idPaper, tx);
+                        }
+                    }
+
+                    for (const university of doc.instStructName_s) {
+                        const inDb = await getUniversityByName(university, tx);
+                        let idUniversity;
+                        if (inDb.length === 0) {
+                            idUniversity = (await createUniversity(university, tx))[0].id;
+                        } else {
+                            idUniversity = inDb[0].id;
+                        }
+
+                        const inDb2 = await getUniversityContributionByPaperIdAndUniversityId(idPaper, idUniversity, tx);
+                        if (inDb2.length <= 0) {
+                            await createUniversityContribution(idPaper, idUniversity, tx);
+                        }
+                    }
+
+                    console.log("Paper '" + doc.title_s + "'(" + idPaper + ") saved");
+                }
+            })
+        }
+
+        return nbScraped;
+    } catch (error) {
+        console.error("Error fetching data:", error);
+        throw error;
+    }
 }
 
 export async function scrapeResearcher(pid: string) {
@@ -287,7 +387,17 @@ export async function scrapeResearcher(pid: string) {
             console.log("Saving papers...");
             const paperIds: Record<string, number> = {};
             for (const paper of papers) {
-                paperIds[paper.doi] = (await createPaper(paper.doi, paper.titre, paper.venue, paper["TYPE_PUBLICATION.id"], parseInt(paper.year), paper.pages.includes("-") ? parseInt(paper.pages.split('-')[0]) : undefined, paper.pages.includes("-") ? parseInt(paper.pages.split('-')[1]) : undefined, paper.ee, tx))[0].id;
+                paperIds[paper.doi] = (await createPaper(
+                    paper.titre,
+                    paper["TYPE_PUBLICATION.id"],
+                    parseInt(paper.year),
+                    tx,
+                    paper.ee,
+                    paper.doi,
+                    paper.venue,
+                    paper.pages.includes("-") ? parseInt(paper.pages.split('-')[0]) : undefined,
+                    paper.pages.includes("-") ? parseInt(paper.pages.split('-')[1]) : undefined)
+                )[0].id;
             }
 
             // Save articles
@@ -329,6 +439,24 @@ export async function searchResearcher(name: string) {
         );
 
     return data;
+}
+
+export async function getLastHalId(tx?: Transaction) {
+    const data = await (tx ? tx : db)
+        .select({ pid: researcherTable.pid })
+        .from(researcherTable)
+        .where(and(
+            like(researcherTable.pid, 'HAL/%'),
+            isNull(researcherTable.deletedAt)
+        ))
+        .orderBy(desc(sql`CAST(SPLIT_PART(${researcherTable.pid}, '/', 2) AS INTEGER)`))
+        .limit(1);
+
+    if (data.length === 0) {
+        return "0";
+    }
+
+    return "" + (parseInt(data[0].pid.split('/')[1]) + 1);
 }
 
 /*
@@ -465,6 +593,17 @@ export async function getResearcher(pid: string, tx?: Transaction) {
         ));
 }
 
+export async function getResearcherByName(last_name: string, first_name: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(researcherTable)
+        .where(and(
+            eq(researcherTable.last_name, last_name),
+            eq(researcherTable.first_name, first_name),
+            isNull(researcherTable.deletedAt)
+        ));
+}
+
 export async function getAllResearchers(tx?: Transaction) {
     return await (tx ? tx : db)
         .select()
@@ -512,6 +651,16 @@ export async function getUniversity(id: number, tx?: Transaction) {
         .where(eq(
             universityTable.id,
             id
+        ));
+}
+
+export async function getUniversityByName(name: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityTable)
+        .where(eq(
+            universityTable.name,
+            name
         ));
 }
 
@@ -619,11 +768,21 @@ export async function deleteTypePublication(id: number, tx?: Transaction) {
         .where(eq(typePublicationTable.id, id));
 }
 
-export async function createPaper(doi: string, titre: string, venue: string, typePublicationId: number, year: number, page_start?: number, page_end?: number, ee?: string, tx?: Transaction) {
+export async function createPaper(titre: string, typePublicationId: number, year: number, tx?: Transaction, ee?: string, doi?: string, venue?: string, page_start?: number, page_end?: number) {
     return await (tx ? tx : db)
         .insert(paperTable)
         .values({ doi, titre, venue, typePublicationId, year, page_start, page_end, ee } as NewPaper)
         .returning({ id: paperTable.id });
+}
+
+export async function getPaperByName(name: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(paperTable)
+        .where(and(
+            eq(paperTable.titre, name),
+            isNull(paperTable.deletedAt))
+        );
 }
 
 export async function getPaperFromResearcherPid(researcherPid: string, tx?: Transaction) {
@@ -791,5 +950,74 @@ export async function deleteContribution(researcherPid: string, position: number
         .where(and(
             eq(contributionTable.researcherPid, researcherPid),
             eq(contributionTable.position, position)
+        ));
+}
+
+export async function createUniversityContribution(paperId: number, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .insert(universityContributionTable)
+        .values({ paperId, universityId } as NewUniversityContribution)
+        .returning({ id: universityContributionTable.id });
+}
+
+export async function getUniversityContribution(id: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(universityContributionTable.id, id),
+            isNull(universityContributionTable.deletedAt)
+        ));
+}
+
+export async function getUniversityContributionByPaperIdAndUniversityId(paperId: number, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(
+                universityContributionTable.paperId,
+                paperId
+            ),
+            eq(
+                universityContributionTable.universityId,
+                universityId
+            ),
+            isNull(universityContributionTable.deletedAt)));
+}
+
+export async function getUniversityContributionByUniversityId(universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(
+                universityContributionTable.universityId,
+                universityId
+            ),
+            isNull(universityContributionTable.deletedAt)));
+}
+
+export async function getUniversityContributionByPaperId(paperId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityContributionTable)
+        .where(and(
+            eq(
+                universityContributionTable.paperId,
+                paperId
+            ),
+            isNull(universityContributionTable.deletedAt)));
+}
+
+export async function deleteUniversityContribution(paperId: number, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .update(universityContributionTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(and(
+            eq(universityContributionTable.paperId, paperId),
+            eq(universityContributionTable.universityId, universityId)
         ));
 }
