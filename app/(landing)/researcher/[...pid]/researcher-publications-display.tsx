@@ -2,8 +2,6 @@
 
 import Publication from "@/components/publication"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useRouter, usePathname, useSearchParams } from "next/navigation"
-import { useCallback } from "react"
 import {
   Pagination,
   PaginationContent,
@@ -19,7 +17,7 @@ export default function ResearcherPublicationsDisplay({
   totalCount = 0,
   currentPage = 1,
   limit = 10,
-  pid,
+  onPageChange,
 }: {
   publications?: {
     id: number
@@ -53,29 +51,10 @@ export default function ResearcherPublicationsDisplay({
   totalCount?: number
   currentPage?: number
   limit?: number
-  pid?: string
+  onPageChange: (page: number) => void
 }) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-
-  // Create a new URLSearchParams instance to modify
-  const createQueryString = useCallback(
-    (name: string, value: string) => {
-      const params = new URLSearchParams(searchParams.toString())
-      params.set(name, value)
-      return params.toString()
-    },
-    [searchParams],
-  )
-
   // Calculate total pages
   const totalPages = Math.ceil(totalCount / limit)
-
-  // Function to navigate to a specific page
-  const goToPage = (page: number) => {
-    router.push(`${pathname}?${createQueryString("page", page.toString())}`)
-  }
 
   // Generate page numbers to display
   const getPageNumbers = () => {
@@ -166,7 +145,7 @@ export default function ResearcherPublicationsDisplay({
               <PaginationContent>
                 <PaginationItem>
                   <PaginationPrevious
-                    onClick={() => currentPage > 1 && goToPage(currentPage - 1)}
+                    onClick={() => currentPage > 1 && onPageChange(currentPage - 1)}
                     className={currentPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                   />
                 </PaginationItem>
@@ -176,7 +155,7 @@ export default function ResearcherPublicationsDisplay({
                     <PaginationItem key={index}>
                       <PaginationLink
                         isActive={page === currentPage}
-                        onClick={() => goToPage(page)}
+                        onClick={() => onPageChange(page)}
                         className="cursor-pointer"
                       >
                         {page}
@@ -191,7 +170,7 @@ export default function ResearcherPublicationsDisplay({
 
                 <PaginationItem>
                   <PaginationNext
-                    onClick={() => currentPage < totalPages && goToPage(currentPage + 1)}
+                    onClick={() => currentPage < totalPages && onPageChange(currentPage + 1)}
                     className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
                   />
                 </PaginationItem>
@@ -203,4 +182,3 @@ export default function ResearcherPublicationsDisplay({
     </section>
   )
 }
-

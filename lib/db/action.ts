@@ -36,7 +36,8 @@ import {
     like,
     desc,
     asc,
-    count
+    count,
+    inArray
 } from 'drizzle-orm';
 import { PgTransaction } from "drizzle-orm/pg-core";
 import { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
@@ -802,31 +803,49 @@ export async function getPaperFromResearcherPid(researcherPid: string, tx?: Tran
         .where(eq(contributionTable.researcherPid, researcherPid));
 }
 
-export async function getPublicationsByResearcherPid(
-    researcherPid: string,
-    page: number = 1,
-    limit: number = 10,
-    tx?: Transaction
-) {
-    const conn = (tx ? tx : db);
-    const offset = (page - 1) * limit;
+export async function getPublicationsByResearcherPid(researcherPid: string, page = 1, limit = 10, tx?: Transaction) {
+    const conn = tx ? tx : db
+    const offset = (page - 1) * limit
 
     // First, get the total count of papers for this researcher
     const countResult = await conn
-        .select({ count: sql<number>`count(*)` })
+        .select({ count: sql<number>`count(distinct ${paperTable.id})` })
         .from(paperTable)
-        .innerJoin(typePublicationTable, eq(paperTable.typePublicationId, typePublicationTable.id))
         .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
-        .where(and(
-            isNull(paperTable.deletedAt),
-            isNull(typePublicationTable.deletedAt),
-            isNull(contributionTable.deletedAt),
-            eq(contributionTable.researcherPid, researcherPid)
-        ));
+        .where(
+            and(
+                isNull(paperTable.deletedAt),
+                isNull(contributionTable.deletedAt),
+                eq(contributionTable.researcherPid, researcherPid),
+            ),
+        )
 
-    const totalCount = countResult[0]?.count || 0;
+    const totalCount = countResult[0]?.count || 0
 
-    // Then get the paginated papers
+    // Get paper IDs for this page with proper pagination
+    const paperIds = await conn
+        .select({ id: paperTable.id })
+        .from(paperTable)
+        .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
+        .where(
+            and(
+                isNull(paperTable.deletedAt),
+                isNull(contributionTable.deletedAt),
+                eq(contributionTable.researcherPid, researcherPid),
+            ),
+        )
+        .orderBy(desc(paperTable.year))
+        .limit(limit)
+        .offset(offset)
+
+    // Extract just the IDs
+    const ids = paperIds.map((p) => p.id)
+
+    if (ids.length === 0) {
+        return { publications: [], totalCount }
+    }
+
+    // Fetch all paper details in a single query
     const papers = await conn
         .select({
             id: paperTable.id,
@@ -840,85 +859,138 @@ export async function getPublicationsByResearcherPid(
             dblp: paperTable.dblp_id,
             typePublication: {
                 name: typePublicationTable.name,
-                abbreviation: typePublicationTable.abbreviation
-            }
+                abbreviation: typePublicationTable.abbreviation,
+            },
         })
         .from(paperTable)
         .innerJoin(typePublicationTable, eq(paperTable.typePublicationId, typePublicationTable.id))
-        .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
-        .where(and(
-            isNull(paperTable.deletedAt),
-            isNull(typePublicationTable.deletedAt),
-            isNull(contributionTable.deletedAt),
-            eq(contributionTable.researcherPid, researcherPid)
-        ))
-        .orderBy(desc(paperTable.year)) // Order by year descending
-        .limit(limit)
-        .offset(offset) as Array<{
-            id: number;
-            doi: string | null;
-            titre: string;
-            venue: string | null;
-            year: number;
-            page_start: number | null;
-            page_end: number | null;
-            ee: string | null;
-            dblp: string | null;
-            typePublication: { name: string; abbreviation: string };
-            authors?: Array<{ pid: string; last_name: string; first_name: string, scraped: number }>;
-            article?: { number: string; volume: string };
-            universities?: Array<{ id: number; name: string }>;
+        .where(and(isNull(paperTable.deletedAt), isNull(typePublicationTable.deletedAt), inArray(paperTable.id, ids)))
+        .orderBy(desc(paperTable.year))
+
+    // Create a map for faster lookups
+    const papersMap = new Map<number, {
+        id: number;
+        doi: string | null;
+        titre: string;
+        venue: string | null;
+        year: number;
+        page_start: number | null;
+        page_end: number | null;
+        ee: string | null;
+        dblp: string | null;
+        typePublication: {
+            name: string;
+            abbreviation: string;
+        };
+        authors: Array<{
+            pid: string;
+            last_name: string;
+            first_name: string;
+            scraped: number;
         }>;
+        universities: Array<{
+            id: number;
+            name: string;
+        }>;
+        article?: {
+            number: string;
+            volume: string;
+        };
+    }>(
+        papers.map((paper) => [
+            paper.id,
+            {
+                ...paper,
+                authors: [],
+                universities: [],
+            },
+        ]),
+    )
 
-    // Fetch related data for each paper
-    for (const paper of papers) {
-        const authors = await conn
-            .select({
-                pid: researcherTable.pid,
-                last_name: researcherTable.last_name,
-                first_name: researcherTable.first_name,
-                scraped: researcherTable.scraped
-            })
-            .from(researcherTable)
-            .innerJoin(contributionTable, eq(researcherTable.pid, contributionTable.researcherPid))
-            .where(and(
-                eq(contributionTable.paperId, paper.id),
+    // Fetch all authors for these papers in a single query
+    const allAuthors = await conn
+        .select({
+            paperId: contributionTable.paperId,
+            pid: researcherTable.pid,
+            last_name: researcherTable.last_name,
+            first_name: researcherTable.first_name,
+            scraped: researcherTable.scraped,
+        })
+        .from(researcherTable)
+        .innerJoin(contributionTable, eq(researcherTable.pid, contributionTable.researcherPid))
+        .where(
+            and(
+                inArray(contributionTable.paperId, ids),
                 isNull(researcherTable.deletedAt),
-                isNull(contributionTable.deletedAt)
-            ));
+                isNull(contributionTable.deletedAt),
+            ),
+        )
 
-        paper.authors = authors;
-
-        const paperInfo = await conn
-            .select({
-                id: articleTable.id,
-                number: articleTable.number,
-                volume: articleTable.volume
+    // Group authors by paper
+    for (const author of allAuthors) {
+        const paper = papersMap.get(author.paperId)
+        if (paper) {
+            paper.authors.push({
+                pid: author.pid,
+                last_name: author.last_name,
+                first_name: author.first_name,
+                scraped: author.scraped,
             })
-            .from(articleTable)
-            .where(eq(articleTable.paperId, paper.id));
-
-        if (paperInfo.length > 0) {
-            paper.article = paperInfo[0];
         }
-
-        const universities = await conn
-            .select({
-                id: universityTable.id,
-                name: universityTable.name
-            })
-            .from(universityTable)
-            .innerJoin(universityContributionTable, eq(universityTable.id, universityContributionTable.universityId))
-            .where(eq(universityContributionTable.paperId, paper.id));
-
-        paper.universities = universities;
     }
+
+    // Fetch all article info for these papers in a single query
+    const allArticles = await conn
+        .select({
+            paperId: articleTable.paperId,
+            id: articleTable.id,
+            number: articleTable.number,
+            volume: articleTable.volume,
+        })
+        .from(articleTable)
+        .where(inArray(articleTable.paperId, ids))
+
+    // Add article info to papers
+    for (const article of allArticles) {
+        const paper = papersMap.get(article.paperId)
+        if (paper) {
+            paper.article = {
+                number: article.number,
+                volume: article.volume,
+            }
+        }
+    }
+
+    // Fetch all universities for these papers in a single query
+    const allUniversities = await conn
+        .select({
+            paperId: universityContributionTable.paperId,
+            id: universityTable.id,
+            name: universityTable.name,
+        })
+        .from(universityTable)
+        .innerJoin(universityContributionTable, eq(universityTable.id, universityContributionTable.universityId))
+        .where(inArray(universityContributionTable.paperId, ids))
+
+    // Group universities by paper
+    for (const university of allUniversities) {
+        const paper = papersMap.get(university.paperId)
+        if (paper) {
+            paper.universities.push({
+                id: university.id,
+                name: university.name,
+            })
+        }
+    }
+
+    // Convert map back to array, preserving order
+    const result = ids.map((id) => papersMap.get(id)).filter(Boolean)
 
     // Return both the paginated papers and the total count
     return {
-        publications: papers,
-        totalCount
-    };
+        publications: result,
+        totalCount,
+    }
 }
 
 export async function updatePaper(id: number, doi?: string, titre?: string, venue?: string, typePublicationId?: number, year?: number, page_start?: number, page_end?: number, ee?: string, tx?: Transaction) {

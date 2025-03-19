@@ -2,23 +2,18 @@ import ResearcherInfo from "./researcher-info"
 import ResearcherInfoDisplay from "./researcher-info-display"
 import { Suspense } from "react"
 import ResearcherPublications from "./researcher-publications"
-import ResearcherPublicationsDisplay from "./researcher-publications-display"
+import ResearcherPublicationsSkeleton from "./researcher-publications-skeleton"
 
 export default async function Page({
   params,
-  searchParams,
 }: {
   params: Promise<{
     pid: string[]
   }>
-  searchParams: { page?: string }
 }) {
   // Attendre la résolution de params avant de l'utiliser
   const resolvedParams = await params
   const pid = resolvedParams.pid.join("/")
-
-  // Get the current page from search params or default to 1
-  const currentPage = searchParams.page ? Number.parseInt(searchParams.page) : 1
 
   return (
     <main className="flex flex-col h-full w-full items-center justify-start p-4">
@@ -26,8 +21,8 @@ export default async function Page({
         <Suspense fallback={<ResearcherInfoDisplay />}>
           <ResearcherInfo pid={pid} />
         </Suspense>
-        <Suspense fallback={<ResearcherPublicationsDisplay />}>
-          <ResearcherPublications pid={pid} page={currentPage} />
+        <Suspense fallback={<ResearcherPublicationsSkeleton />}>
+          <ResearcherPublications pid={pid} />
         </Suspense>
       </section>
     </main>
