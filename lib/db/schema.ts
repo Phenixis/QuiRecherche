@@ -283,6 +283,8 @@ export const contribution = pgTable(
   }
 );
 
+// TODO: Faire une table coordonnées pour l'associer à une université ?
+
 /* RELATIONS */
 
 export const teamsRelations = relations(teams, ({ many }) => ({

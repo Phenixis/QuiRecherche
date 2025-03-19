@@ -10,7 +10,12 @@ export function useSearch(query: string | null) {
   )
 
   return {
-    researchers: data as Researcher[],
+    researchers: data as {
+      pid: string,
+      first_name: string,
+      last_name: string,
+      nb_articles: number,
+    }[],
     isLoading,
     isError: error,
   }

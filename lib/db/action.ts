@@ -36,6 +36,7 @@ import {
     like,
     desc,
     asc,
+    count
 } from 'drizzle-orm';
 import { PgTransaction } from "drizzle-orm/pg-core";
 import { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
@@ -430,12 +431,19 @@ export async function scrapeResearcher(pid: string) {
 }
 
 export async function searchResearcher(name: string) {
-    const data = await db.select()
+    const data = await db.select({
+        pid: researcherTable.pid,
+        last_name: researcherTable.last_name,
+        first_name: researcherTable.first_name,
+        nb_articles: count(contributionTable.paperId),
+    })
         .from(researcherTable)
+        .innerJoin(contributionTable, eq(researcherTable.pid, contributionTable.researcherPid))
+        .groupBy(researcherTable.pid)
         .where(or(or(
-            like(researcherTable.last_name, `%${name}%`),
-            like(researcherTable.first_name, `%${name}%`)),
-            like(sql`CONCAT(${researcherTable.first_name}, ' ', ${researcherTable.last_name})`, `%${name}%`))
+            like(sql`LOWER(${researcherTable.last_name})`, `%${name.toLowerCase()}%`),
+            like(sql`LOWER(${researcherTable.first_name})`, `%${name.toLowerCase()}%`)),
+            like(sql`LOWER(CONCAT(${researcherTable.first_name}, ' ', ${researcherTable.last_name}))`, `%${name.toLowerCase()}%`))
         );
 
     return data;

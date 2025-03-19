@@ -17,11 +17,12 @@ export default function ResultatsSearch() {
                 <div className="p-4 text-center text-red-500">Error loading results</div>
             ) : researchers && researchers.length > 0 ? (
                 <div>
-                    {researchers.map((researcher) => (
-                        <Link key={researcher.pid} href={`/researcher/${researcher.pid}`}>
-                            <div key={researcher.pid} className="flex items-center justify-between p-4 border-b border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
-                                {researcher.first_name} {researcher.last_name}
-                            </div>
+                    {researchers.slice(0, 5).map((researcher) => (
+                        <Link key={researcher.pid} href={`/researcher/${researcher.pid}`} className="flex items-center justify-between p-4 border-b border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-lg">
+                            {researcher.first_name} {researcher.last_name}
+                            <span className="text-gray-500 text-md">
+                                {researcher.nb_articles} articles
+                            </span>
                         </Link>
                     ))}
                 </div>
