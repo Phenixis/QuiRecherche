@@ -107,7 +107,7 @@ export default function Publication({
 										<span className="font-bold mb-2">Universities Involved</span>{" "}
 										<div>
 											{
-												universities && universities.map((university, index) =>
+												universities.map((university, index) =>
 													<span key={index}>
 														<Link href={`/university/${university.id}`} className="text-blue-500 underline">
 															{university.name}
