@@ -802,9 +802,31 @@ export async function getPaperFromResearcherPid(researcherPid: string, tx?: Tran
         .where(eq(contributionTable.researcherPid, researcherPid));
 }
 
-export async function getPublicationsByResearcherPid(researcherPid: string, tx?: Transaction) {
+export async function getPublicationsByResearcherPid(
+    researcherPid: string,
+    page: number = 1,
+    limit: number = 10,
+    tx?: Transaction
+) {
     const conn = (tx ? tx : db);
+    const offset = (page - 1) * limit;
 
+    // First, get the total count of papers for this researcher
+    const countResult = await conn
+        .select({ count: sql<number>`count(*)` })
+        .from(paperTable)
+        .innerJoin(typePublicationTable, eq(paperTable.typePublicationId, typePublicationTable.id))
+        .innerJoin(contributionTable, eq(paperTable.id, contributionTable.paperId))
+        .where(and(
+            isNull(paperTable.deletedAt),
+            isNull(typePublicationTable.deletedAt),
+            isNull(contributionTable.deletedAt),
+            eq(contributionTable.researcherPid, researcherPid)
+        ));
+
+    const totalCount = countResult[0]?.count || 0;
+
+    // Then get the paginated papers
     const papers = await conn
         .select({
             id: paperTable.id,
@@ -829,7 +851,10 @@ export async function getPublicationsByResearcherPid(researcherPid: string, tx?:
             isNull(typePublicationTable.deletedAt),
             isNull(contributionTable.deletedAt),
             eq(contributionTable.researcherPid, researcherPid)
-        )) as Array<{
+        ))
+        .orderBy(desc(paperTable.year)) // Order by year descending
+        .limit(limit)
+        .offset(offset) as Array<{
             id: number;
             doi: string | null;
             titre: string;
@@ -845,6 +870,7 @@ export async function getPublicationsByResearcherPid(researcherPid: string, tx?:
             universities?: Array<{ id: number; name: string }>;
         }>;
 
+    // Fetch related data for each paper
     for (const paper of papers) {
         const authors = await conn
             .select({
@@ -884,11 +910,15 @@ export async function getPublicationsByResearcherPid(researcherPid: string, tx?:
             .from(universityTable)
             .innerJoin(universityContributionTable, eq(universityTable.id, universityContributionTable.universityId))
             .where(eq(universityContributionTable.paperId, paper.id));
-        
-        paper.universities = universities
+
+        paper.universities = universities;
     }
 
-    return papers;
+    // Return both the paginated papers and the total count
+    return {
+        publications: papers,
+        totalCount
+    };
 }
 
 export async function updatePaper(id: number, doi?: string, titre?: string, venue?: string, typePublicationId?: number, year?: number, page_start?: number, page_end?: number, ee?: string, tx?: Transaction) {
