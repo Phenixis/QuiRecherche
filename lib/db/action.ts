@@ -136,7 +136,7 @@ export async function scrapeHalAndSaveInDB() {
                         }
                     }
 
-                    console.log("Paper '" + doc.title_s + "'(" + idPaper + ") saved");
+                    // console.log("Paper '" + doc.title_s + "'(" + idPaper + ") saved");
                 }
             })
         }
