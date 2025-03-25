@@ -285,6 +285,28 @@ export const contribution = pgTable(
 
 // TODO: Faire une table coordonnées pour l'associer à une université ?
 
+export const coordonnees = pgTable('coordonnees', {
+  id: serial('id').primaryKey(),
+  latitude: varchar('latitude', { length: 255 }).notNull(),
+  longitude: varchar('longitude', { length: 255 }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+export const coordonneesUniversite = pgTable('coordonnees_universite', {
+  id: serial('id').primaryKey(),
+  coordonneesId: integer('coordonnees_id')
+    .notNull()
+    .references(() => coordonnees.id, { onDelete: "cascade" }),
+  universityId: integer('university_id')
+    .notNull()
+    .references(() => university.id, { onDelete: "cascade" }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
 /* RELATIONS */
 
 export const teamsRelations = relations(teams, ({ many }) => ({
@@ -388,6 +410,7 @@ export const TicketCommentRelations = relations(ticketComment, ({ one }) => ({
 export const UniversityRelations = relations(university, ({ many }) => ({
   affiliations: many(affiliation),
   contributions: many(universityContribution),
+  coordonnees: many(coordonneesUniversite),
 }));
 
 export const ResearcherRelations = relations(researcher, ({ many }) => ({
@@ -449,6 +472,21 @@ export const UniversityContributionRelations = relations(universityContribution,
   }),
 }));
 
+export const CoordonneesRelations = relations(coordonnees, ({ many }) => ({
+  universities: many(coordonneesUniversite),
+}));
+
+export const CoordonneesUniversiteRelations = relations(coordonneesUniversite, ({ one }) => ({
+  coordonnees: one(coordonnees, {
+    fields: [coordonneesUniversite.coordonneesId],
+    references: [coordonnees.id],
+  }),
+  university: one(university, {
+    fields: [coordonneesUniversite.universityId],
+    references: [university.id],
+  }),
+}));
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Team = typeof teams.$inferSelect;
@@ -489,6 +527,10 @@ export type Contribution = typeof contribution.$inferSelect;
 export type NewContribution = typeof contribution.$inferInsert;
 export type UniversityContribution = typeof universityContribution.$inferSelect;
 export type NewUniversityContribution = typeof universityContribution.$inferInsert;
+export type Coordonnees = typeof coordonnees.$inferSelect;
+export type NewCoordonnees = typeof coordonnees.$inferInsert;
+export type CoordonneesUniversite = typeof coordonneesUniversite.$inferSelect;
+export type NewCoordonneesUniversite = typeof coordonneesUniversite.$inferInsert;
 
 export enum ActivityType {
   SIGN_UP = 'SIGN_UP',

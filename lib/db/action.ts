@@ -8,6 +8,8 @@ import {
     article as articleTable,
     contribution as contributionTable,
     universityContribution as universityContributionTable,
+    coordonnees as coordonneesTable,
+    coordonneesUniversite as coordonneesUniversiteTable,
     Researcher,
     NewResearcher,
     University,
@@ -23,7 +25,11 @@ import {
     Contribution,
     NewContribution,
     UniversityContribution,
-    NewUniversityContribution
+    NewUniversityContribution,
+    Coordonnees,
+    NewCoordonnees,
+    CoordonneesUniversite,
+    NewCoordonneesUniversite
 } from "./schema";
 import {
     and,
@@ -688,6 +694,14 @@ export async function getUniversitiesByResearcherPid(researcherPid: string, tx?:
         .where(eq(affiliationTable.researcherPid, researcherPid));
 }
 
+export async function getUniversitiesByCoordonneesId(coordonneesId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(universityTable)
+        .innerJoin(coordonneesUniversiteTable, eq(universityTable.id, coordonneesUniversiteTable.universityId))
+        .where(eq(coordonneesUniversiteTable.coordonneesId, coordonneesId));
+}
+
 export async function updateUniversity(id: number, name?: string, tx?: Transaction) {
     return await (tx ? tx : db)
         .update(universityTable)
@@ -1221,4 +1235,49 @@ export async function deleteUniversityContribution(paperId: number, universityId
             eq(universityContributionTable.paperId, paperId),
             eq(universityContributionTable.universityId, universityId)
         ));
+}
+
+export async function createCoordonnees(latitude: string, longitude: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .insert(coordonneesTable)
+        .values({ latitude, longitude } as NewCoordonnees)
+        .returning({ id: coordonneesTable.id });
+}
+
+export async function getCoordonnees(id: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(coordonneesTable)
+        .where(eq(
+            coordonneesTable.id,
+            id
+        ));
+}
+
+export async function getCoordoonneesByUniversityId(universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(coordonneesTable)
+        .innerJoin(coordonneesUniversiteTable, eq(coordonneesTable.id, coordonneesUniversiteTable.coordonneesId))
+        .where(eq(coordonneesUniversiteTable.id, universityId));
+}
+
+export async function updateCoordonnees(id: number, latitude?: string, longitude?: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .update(coordonneesTable)
+        .set({
+            latitude,
+            longitude,
+            updatedAt: sql`CURRENT_TIMESTAMP`
+        })
+        .where(eq(coordonneesTable.id, id));
+}
+
+export async function deleteCoordonnees(id: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .update(coordonneesTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(coordonneesTable.id, id));
 }
