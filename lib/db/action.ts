@@ -43,7 +43,8 @@ import {
     desc,
     asc,
     count,
-    inArray
+    inArray,
+    notExists
 } from 'drizzle-orm';
 import { PgTransaction } from "drizzle-orm/pg-core";
 import { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
@@ -799,6 +800,13 @@ export async function createPaper(titre: string, typePublicationId: number, year
         .returning({ id: paperTable.id });
 }
 
+export async function getPaperIdsByUniversityId(universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select({ paperId: universityContributionTable.paperId })
+        .from(universityContributionTable)
+        .where(eq(universityContributionTable.universityId, universityId));
+}
+
 export async function getPaperByName(name: string, tx?: Transaction) {
     return await (tx ? tx : db)
         .select()
@@ -1244,6 +1252,23 @@ export async function createCoordonnees(latitude: string, longitude: string, tx?
         .returning({ id: coordonneesTable.id });
 }
 
+export async function getInfoGlobe(tx?: Transaction) {
+    return await db
+        .select({
+            lat: coordonneesTable.latitude,
+            lng: coordonneesTable.longitude,
+            name: universityTable.name,
+            ids: sql`array_agg(${universityContributionTable.paperId})`.as<Array<number>>()
+        })
+        .from(coordonneesTable)
+        .innerJoin(coordonneesUniversiteTable, eq(coordonneesTable.id, coordonneesUniversiteTable.coordonneesId))
+        .innerJoin(universityTable, eq(coordonneesUniversiteTable.universityId, universityTable.id))
+        .innerJoin(universityContributionTable, eq(universityTable.id, universityContributionTable.universityId))
+        .where(isNull(coordonneesTable.deletedAt))
+        .groupBy(coordonneesTable.id, universityTable.id)
+        .orderBy(coordonneesTable.id);
+}
+
 export async function getCoordonnees(id: number, tx?: Transaction) {
     return await (tx ? tx : db)
         .select()
@@ -1252,6 +1277,17 @@ export async function getCoordonnees(id: number, tx?: Transaction) {
             coordonneesTable.id,
             id
         ));
+}
+
+export async function getIdByCoordonnees(latitude: string, longitude: string, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(coordonneesTable)
+        .where(and(
+            eq(coordonneesTable.latitude, latitude),
+            eq(coordonneesTable.longitude, longitude)
+        ))
+        .limit(1);
 }
 
 export async function getCoordoonneesByUniversityId(universityId: number, tx?: Transaction) {
@@ -1280,4 +1316,82 @@ export async function deleteCoordonnees(id: number, tx?: Transaction) {
             deletedAt: sql`CURRENT_TIMESTAMP`,
         })
         .where(eq(coordonneesTable.id, id));
+}
+
+export async function createCoordonneesUniversite(coordonneesId: number, universityId: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .insert(coordonneesUniversiteTable)
+        .values({ coordonneesId, universityId } as NewCoordonneesUniversite);
+}
+
+export async function getCoordonneesUniversite(id: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .select()
+        .from(coordonneesUniversiteTable)
+        .where(eq(
+            coordonneesUniversiteTable.id,
+            id
+        ));
+}
+
+export async function updateCoordonneesUniversite(id: number, coordonneesId?: number, universityId?: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .update(coordonneesUniversiteTable)
+        .set({
+            coordonneesId,
+            universityId,
+            updatedAt: sql`CURRENT_TIMESTAMP`
+        })
+        .where(eq(coordonneesUniversiteTable.id, id));
+}
+
+export async function deleteCoordonneesUniversite(id: number, tx?: Transaction) {
+    return await (tx ? tx : db)
+        .update(coordonneesUniversiteTable)
+        .set({
+            deletedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(coordonneesUniversiteTable.id, id));
+}
+
+export async function getCoordonneesForEachUniversity() {
+    try {
+
+        const universitiesNameWithoutCoordonnees = await db
+            .select({ id: universityTable.id, name: universityTable.name })
+            .from(universityTable)
+            .where(notExists(
+                db
+                    .select()
+                    .from(coordonneesUniversiteTable)
+                    .where(eq(coordonneesUniversiteTable.universityId, universityTable.id))
+            ));
+
+        for (const university of universitiesNameWithoutCoordonnees) {
+            const data = await fetch("https://nominatim.openstreetmap.org/search?q=" + university.name + "&format=json&limit=1")
+                .then(res => res.json())
+                .then(json => {
+                    if (Array.isArray(json) && json.length > 0) {
+                        return json[0];
+                    }
+                });
+
+            if (data) {
+                const coordInDb = await getIdByCoordonnees("" + data.lat, "" + data.lon);
+
+                let coordonnees_id;
+                if (coordInDb.length === 0) {
+                    coordonnees_id = (await createCoordonnees(data.lat, data.lon))[0].id;
+                } else {
+                    coordonnees_id = coordInDb[0].id;
+                }
+
+                await createCoordonneesUniversite(coordonnees_id, university.id);
+            }
+        }
+    } catch (e: any) {
+        return false;
+    }
+
+    return true;
 }
