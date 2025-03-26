@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`bg-white text-black dark:text-white ${manrope.className}`}
+      className={`bg-white text-black dark:text-white ${manrope.className} scrollbar-hide`}
     >
       <body>
         <link

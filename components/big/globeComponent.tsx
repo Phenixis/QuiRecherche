@@ -13,6 +13,7 @@ import {
 import { usePublication } from "@/hooks/use-publication";
 import type { Publication as TypePublication } from "@/lib/db/action";
 import Publication from "../publication";
+import Search from "@/components/big/search";
 
 interface PointData {
 	lat: string;
@@ -116,11 +117,12 @@ export default function GlobeComponent({
 	}, [pointClicked]);
 
 	return (
-		<div className="h-fit w-fit rounded-md overflow-hidden">
-			<div ref={globeEl} className={cn("w-full h-full", className)} />
+		<div className="h-fit w-fit rounded-md overflow-hidden relative scrollbar-hide">
+			<div ref={globeEl} className={cn("w-full h-full overflow-hidden", className)} />
+			<Search className="absolute top-4 left-4 z-50 bg-background w-full max-w-96" />
 			<Card
 				className={`${!isOpened && "hidden"
-					} absolute top-4 left-4 w-full max-w-96`}
+					} absolute top-16 left-4 w-full max-w-96`}
 			>
 				<CardHeader className="flex justify-between items-center flex-row w-full py-4">
 					<CardTitle>{pointClicked?.name} - {pointClicked?.ids?.length ?? 0} article{(pointClicked?.ids?.length ?? 0) > 1 && "s"}</CardTitle>
